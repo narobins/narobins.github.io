@@ -1,0 +1,157 @@
+html, body {
+	font-family: "Courier New";
+	padding:0;
+	margin:0;
+	font-size:11pt;
+}
+
+body {
+	padding-left:180px;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-size:11pt;
+	padding:15px 0 0 15px;
+	margin:0;
+}
+
+#menu {
+	width:180px;
+	height:100vh;
+	margin:0;
+	padding:0;
+	padding-left:20px;
+	padding-top:30px;
+	position:fixed;
+	margin-left:-180px;
+}
+
+#content {
+	position:relative;
+	float:left;
+	width:100%;
+	margin-right:200px;
+	margin-top:40px;
+}
+
+#content .img {
+	padding-right:125px;
+	padding-left:15px;
+	height:100vh;
+	position:relative;
+	text-align:center;
+	margin:20px 0;
+}
+
+#content .text {
+	padding-right:125px;
+	text-align:center;
+	margin:80px 0 0 0;
+}
+
+#content img {
+	max-width:100%;
+	max-height:100%;
+	height:auto;
+	margin:0 auto;
+}
+
+#content .img, #content .text {
+	margin-left:20px;
+}
+
+
+.project {
+	margin:35px 0;
+}
+
+.details {
+	width:100px;
+	display:inline-block;
+	vertical-align:text-bottom;
+	position:absolute;
+	bottom:0;
+	right:30px;
+}
+
+.details img {
+	margin:5px 0;
+}
+
+.details:before {
+	content:"details: ";
+}
+
+.details img {
+	max-width:100%;
+	max-height:100%;
+}
+
+p {
+	max-width:600px;
+	margin:0 auto;
+	text-align:left;
+}
+
+p.right {
+	text-align:right;
+	max-width:none;
+}
+
+ul {
+	list-style-type:none;
+	text-indent:0;
+	max-width:600px;
+}
+
+#content ul {
+	margin:0 auto;
+}
+
+#menu ul {
+	padding-left:0px;
+}
+
+#content .text ul {
+	text-align:left;
+}
+
+#content .text ul strong {
+	display:inline-block;
+	width:90px;
+}
+
+#content .text li:before {
+	content:"";
+}
+
+li:before {
+	content:"+ ";
+	color:#aaa;
+}
+
+#menu li:before {
+	content:"|-- ";
+	color:#aaa;
+}
+
+#menu li li:before {
+	content:"|\00a0\00a0\00a0|-- ";
+	color:#aaa;
+}
+
+#menu li:last-child:before {
+	content:"`-- ";
+}
+	
+#menu li li:last-child:before {
+	content:"|\00a0\00a0\00a0`-- ";
+}
+	
+#menu li:last-child li:before {
+	content:"\00a0\00a0\00a0\00a0|-- ";
+}
+	
+#menu li:last-child li:last-child:before {
+	content:"\00a0\00a0\00a0\00a0`-- ";
+}
