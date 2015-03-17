@@ -155,3 +155,11 @@ li:before {
 #menu li:last-child li:last-child:before {
 	content:"\00a0\00a0\00a0\00a0`-- ";
 }
+
+a {
+	color:black;
+}
+
+a:hover, a:active {
+	color:#aaa;
+}
