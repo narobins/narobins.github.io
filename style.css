@@ -98,6 +98,7 @@ p {
 p.right {
 	text-align:right;
 	max-width:none;
+	margin-right:50px;
 }
 
 ul {
