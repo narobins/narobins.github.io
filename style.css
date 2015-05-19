@@ -67,10 +67,10 @@ h1, h2, h3, h4, h5, h6 {
 	user-select: none;
 	white-space: nowrap;
 	/*max-width:90%;*/
-	/*max-height:120vh;*/
 }
 
 #content .comic img {
+	max-height:120vh;
 	display:none;
 	vertical-align:middle;
 }
