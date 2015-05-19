@@ -58,6 +58,43 @@ h1, h2, h3, h4, h5, h6 {
 	margin:0 auto;
 }
 
+#content .comic {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+}
+
+#content .comic img {
+	max-height:120vh;
+	display:none;
+	vertical-align:middle;
+}
+
+#content .comic .prev, #content .comic .next {
+	display:inline-block;
+	height:100vh;
+	width:20px;
+	font-size:3em;
+	line-height:100vh;
+	vertical-align:middle;
+	margin:5px;
+}
+
+#content .comic .prev:before {
+	content:"<";
+}
+
+#content .comic .next:after {
+	content:">";
+}
+
+#content .comic .current {
+	display:inline-block;
+}
+
 #content .img, #content .text {
 	margin-left:20px;
 }
