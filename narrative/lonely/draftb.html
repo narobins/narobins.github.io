@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>I am lonely will anyone speak to me</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+		<style type="text/css">
+			* {
+				padding:0;
+				margin:0;
+			}
+
+			body {
+				font-family:Verdana;
+				font-size:9.5pt;
+				color:#888;
+				overflow-x:hidden;
+				text-align:center;
+			}
+
+			.container {
+				background-image:url("bg.png");
+				background-attachment:fixed;
+				max-width:1200px;
+			}
+
+			.img {
+				width:100%;
+				display:inline-block;
+			}
+			.img:not(.search) {
+				max-width:400px;
+			}
+
+			.img.search {
+				width:500px;
+			}
+
+			img {
+				width:100%;
+				height:100%;
+			}
+			img:not(.stick) {
+				outline:3px solid white;
+			}
+
+			.search img {
+				position:relative;
+				top:-70px;
+			}
+
+			.column {
+				width:33.33333333%;	
+				/*margin:0 auto;*/
+				position:relative;
+
+			}
+
+			.layers {
+				top:0;
+				left:0;
+				position:relative;
+			}
+
+			.layer1 {
+				top:0;
+				left:0;
+				position:relative;
+			}
+
+			.layer {
+				top:0;
+				left:0;
+				position:absolute;
+				
+			}
+
+			.blue .img {
+				margin-right:0;
+				margin-left:auto;
+			}
+
+			.red .img {
+				margin-left:0;
+				margin-right:auto;
+			}
+
+			.green .img {
+				margin-right:auto;
+				margin-left:auto;
+			}
+
+			.stuck {
+				position:fixed;
+			}
+
+			.unstuck {
+				position:absolute;
+			}
+
+			.box {
+				padding:10px;
+				text-align:left;
+				margin:15px;
+				z-index:3;
+			}
+
+			.box .icon {
+				width:30px;
+				height:30px;
+				outline:1px solid #888;
+				display:inline-block;
+				margin-right:20px;
+				float:left;
+				z-index:1;
+			}
+
+			.box .post {
+				padding:10px;
+				border-bottom:1px solid #bbb;
+			}
+
+			.box .post .user {
+				font-style:italic;
+			}
+
+
+			.opening.box, .closing.box {
+				overflow:hidden;
+				height:50px;
+				padding-top:160px;
+			}
+			
+			.grey.box {
+				width:50vw;
+				margin:0 auto;
+			}
+			
+			.column .box {
+								width:30vw;
+								background:none;
+								padding:0;
+			}
+			.column .box p {
+								background:white;
+								margin:0;
+								padding:3px;
+								display:inline-block;
+
+			}
+
+			.red .box, .column .red.box {
+				color: #db5200;
+				position:absolute;
+			}
+
+			.green .box, .column .green.box {
+				color: #769300;
+				position:absolute;
+			}
+
+			.blue .box, .column .blue.box  {
+				color: #017899;
+				position:absolute;
+			}
+
+			.box p {
+				margin: 10px;
+			}
+
+
+			.guest {
+				font-size:80%;
+			}
+
+			.text {
+				margin-top:15px;
+				margin-bottom:10px;
+			}
+
+			.flip {
+				z-index:2;
+				height:100vh;
+				width:100vw;
+				opacity:0.7;
+				visibility:hidden;
+				padding-top:20%;
+			}
+
+			.current_flip {
+				z-index:4;
+			}
+
+			.current_flip, .next_flip {
+				position:fixed;
+				top:0;
+				left:0;
+				visibility:visible;
+			}
+
+			.next_flip {
+				z-index:2;
+			}
+
+			.filler {
+				height:100vh;
+				width:100vw;
+			}
+
+			h2 {
+				margin:15px 0;
+			}
+
+			img.chair_person {
+				width:33vw;
+				height:auto;
+				position:absolute;
+				outline-width:0; !important
+			}
+
+			h3 {
+				font-size:10pt;
+				font-weight:normal;
+				margin:0 0 30px 0;
+			}
+
+			h2.search {
+				width:400px;
+				text-align:left;
+				margin: 0 auto 30px auto;
+			}
+
+			.sprite {
+				background-image:url("sprites_small.png");
+				position:absolute;
+				width:120px;
+				height:240px;
+				z-index:2;
+			}
+		</style>
+
+		<script type="text/javascript">
+
+			$(function() {
+
+				$(window).resize(function() {
+					var col = $(".container").width() / 3;
+					$(".column").css("width", col + "px");
+					$(".green.column").css("border-left", col + "px solid white");
+					$(".green.column").css("border-right", col + "px solid white");
+					$(".red.column").css("border-right", (2 * col) + "px solid white");
+					$(".blue.column").css("border-left", (2 * col) + "px solid white");
+				});
+
+				$window = $(window);
+				var prev_scroll = $window.scrollTop();
+				var col = $(".container").width() / 3;
+				var bg_pos = 0;
+
+				$(".column").css("width", col + "px");
+				$(".green.column").css("border-left", col + "px solid white");
+				$(".green.column").css("border-right", col + "px solid white");
+				$(".red.column").css("border-right", (2 * col) + "px solid white");
+				$(".blue.column").css("border-left", (2 * col) + "px solid white");
+				$(window).scroll(function () {
+			        var window_top = $window.scrollTop();
+			        var half_window = window_top + (1/2) * $window.height();
+
+			 		$('.stick').each(function() {
+			 			var div_top = $(this).offset().top + (1/2) * $(this).height();
+			 			var parent_center = $(this).parent().offset().top + $(this).parent().height()/2;
+		 				var w = $(this).parent().width();
+		 				var h = $(this).parent().height();
+		 				var t = $(this).parent().offset().top;
+		 				var l = $(this).parent().offset().left;
+			 			if (parent_center < half_window) {
+			 				if (!$(this).hasClass("stuck")) {
+				 				$(this).removeClass("unstuck");
+				 				$(this).addClass("stuck");
+				 				$(this).width(w);
+				 				$(this).height(h);
+				 				$(this).offset({top: half_window - $(this).height() / 2, left: l});
+				 				if ($(this).parent().height() < h) {
+				 					$(this).parent().offset({top: half_window - $(this).height() / 2, left: l});
+									$(this).parent().height(h);
+				 				}
+				 			}
+			 			} else {
+			 				if ($(this).hasClass("stuck")) {
+			 					$(this).removeClass("stuck");
+			 					$(this).addClass("unstuck");
+				 				$(this).offset({top: t, left: l});
+				 			}
+			 			}
+			 		});
+
+					$(".animate").each(function() {
+						var num = $(this).children().length;
+						var top = ($(this).offset().top + $(this).height())- window_top;
+						var segments = ($window.height() - $(this).height()) / num;
+						var idx = ($(this).offset().top - window_top) / segments;
+						if (idx > 0 && idx < num) {
+							$(this).children().css("visibility", "hidden");
+							$(this).children().eq(Math.floor(idx)).css("visibility", "visible");
+						}
+					});
+
+					$(".opening.box").each(function() {
+						var div_top = $(this).offset().top + (1/2) * $(this).height();
+						if ($(this).parent().hasClass("next_flip")) {
+							if ($(this).parent().css("opacity") < 0.4) {
+								$(this).find("h2").html("i");
+							} else if ($(this).parent().css("opacity") < 0.7) {
+								$(this).find("h2").html("i am");
+							} else {
+								$(this).find("h2").html("i am lonely");
+							}
+						} else if ($(this).parent().hasClass("current_flip")) {
+							if ($(this).find("h2").html().length < 12) {
+								$(this).find("h2").html("i am lonely will anyone speak to me");
+							}
+							$(this).get(0).scrollTop += (window_top - prev_scroll);
+						}
+					});
+
+					bg_pos = (bg_pos - 2 * (window_top - prev_scroll)) % 300;
+					$(".container").css("backgroundPosition", "0 " + bg_pos + "px");
+
+
+					$(".flip").each(function() {
+						var n = parseInt($(this).attr("data-num")) + 1;
+						var z = parseInt($(this).css("z-index"));
+						var upper = $(this).parent().offset().top;
+						var lower = upper + $(this).parent().height();
+						if (upper <= window_top && lower >= window_top) {
+							$(this).addClass("current_flip");
+							$(this).removeClass("next_flip");
+							if ($(this).hasClass("no-fade")) {
+								$(this).css("opacity, 1");
+							} else {
+								$(this).css("opacity", 1 - (window_top - upper) / $(this).parent().height());
+							}
+						} else if (upper <= window_top + $window.height() && lower >= window_top + $window.height()) {
+							$(this).removeClass("current_flip");
+							$(this).addClass("next_flip");
+							if ($(this).hasClass("no-fade")) {
+								$(this).css("opacity", 1);
+							} else {
+								$(this).css("opacity", (window_top + $window.height() - upper) / $(this).parent().height());
+							}
+						} else {
+							$(this).removeClass("next_flip");
+							$(this).removeClass("current_flip");
+						}
+					});
+
+					$(".ending").each(function() {
+						var upper = $(this).parent().offset().top;
+						var lower = upper + $(this).parent().height();
+						var x, y;
+						if (upper <= window_top && lower >= window_top) {
+							if (prev_scroll < $window.scrollTop()) { // scrolling down
+								x = Math.random() * $window.width() - 60;
+								y = Math.random() * $window.height()- 120;
+								i = - Math.floor(Math.random() * 8) * 120;
+								j = - Math.floor(Math.random() * 5) * 240;
+								var sprite = $('<i class="sprite"></i>');
+								sprite.css("top", y + 'px');
+								sprite.css("left", x + 'px');
+								sprite.css("background-position", i + 'px ' + j + 'px');
+								$(this).append(sprite);
+							} else { // scrolling up
+								$(this).children("i").last().remove();
+							}
+						} else if (upper > window_top) {
+							$(this).children("i").remove();
+						}
+					});
+
+		 			$(".slide_left").each(function() {
+		 				var dist = $window.scrollTop() + $window.height() - $(this).parents(".filler").offset().top;
+		 				if (dist < 150 && dist > 0) {
+			 				var left = Math.max(-150, Math.min(0, $(this).offset().left + (window_top - prev_scroll) / 2));
+			 				$(this).offset({left: left});
+			 			}
+		 			});
+					$(".slide_right").each(function() {
+		 				var dist = $window.scrollTop() + $window.height() - $(this).parents(".filler").offset().top;
+		 				if (dist < 150 && dist > 0) {
+		 					var old = $window.width() - ($(this).offset().left + $(this).width());
+			 				var right = Math.max(-150, Math.min(0, old + (window_top - prev_scroll) / 2));
+			 				$(this).offset({left: $window.width() - right - $(this).width()});
+			 			}
+		 			});
+
+		 			prev_scroll = window_top;
+
+			    });
+			});
+		</script>
+	</head>
+	<body>
+
+		<div class="filler">
+			<div class="flip" style="visibility:visible">
+				<h2>i am lonely will anyone speak to me</h2>
+				<h3>by Nellie Robinson</h3>
+<br>
+<br>
+				<p>created in Paul Karasik's spring 2015 CoMix class</p>
+			</div>
+		</div>
+		<div class="filler">
+			<div class="flip" data-num="0">
+				<div class="grey box" style="padding-top:10%">
+					<p>July 14th, 2004:</p>
+
+					<p>A thread titled "I am lonely will anyone speak to me" began on an Internet forum.</p>
+
+					<p>By August 2005, it had almost 1,500 posts, was one of the top results for the Google search "I am lonely," and had been profiled in <i>The New Yorker</i>, <i>Wired</i>, and <i>The Guardian</i>. Thousands of anonymous users were reaching the thread in search of companionship, community, and connection with others.</p>
+				</div>
+			</div>
+		</div>
+		<div class="filler">
+			<div class="flip" data-num="1"><div class="search img"> <img src="0.jpg"></div></div>
+		</div>
+		<div class="filler">
+			<div class="flip" data-num="2">
+				<div class="opening grey box" style="padding-left:100px;padding-right:100px">
+					<h2 class="search">i</h2>
+					<div class="post">
+						<div class="user">lonely</div>
+						<div class="guest">Guest</div>
+						<div class="text">please will anyone speak about anything to me</div>
+					</div>
+					<div class="post">
+						<div class="user">Fay</div>
+						<div class="guest">Guest</div>
+						<div class="text"> Why are you lonely? Are you on your own?</div>
+					</div>
+					<div class="post">
+						<div class="user">jonesb2</div>
+						<div class="guest">Guest</div>
+						<div class="text"> Im also lonely right now. Dont have much to do.</div>
+					</div>
+					<div class="post">
+						<div class="user">Paul</div>
+						<div class="guest">Guest</div>
+						<div class="text"> i am lonely too...sometimes life is no fun.</div>
+					</div>
+					<div class="post">
+						<div class="user">jonesb2</div>
+						<div class="guest">Guest</div>
+						<div class="text">Obv. we're not as lonely as we think. well. at least, we're not ALONE in being lonely...</div>
+					</div>
+					<div class="post">
+						<div class="user">cat75</div>
+						<div class="guest">Guest</div>
+						<div class="text"> am lonely too, moved to new town and not sure how to meet people...</div>
+					</div>
+					<div class="post">
+						<div class="user">Jade</div>
+						<div class="guest">Guest</div>
+						<div class="text">Get a JOB!</div>
+					</div>
+					<div class="post">
+						<div class="user">garysmith</div>
+						<div class="guest">Guest</div>
+						<div class="text">i have gone beyond wanting a girlfreind, I just want freind to talk to </div>
+					</div>
+					<div class="post">
+						<div class="user">Jade</div>
+						<div class="guest">Guest</div>
+						<div class="text">yeah</div>
+					</div>
+					<div class="post">
+						<div class="user">Guest</div>
+						<div class="guest">Guest</div>
+						<div class="text"> Im also lonely right now. Dont have much to do.</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="filler" style="height:50vh"></div>
+
+
+		<div class="container">
+		<div class="green column"><div class="img"><img src="g1.png"></div></div>
+		<div class="red column">
+			<div class="box" style="top:25%;left:99%"> dude, i typed in "I am lonely" in google, and your post was the very first response.</div>
+			<div class="box" style="top:40%;left:150%">does that make you the most popular lonliest person on the planet?</div>
+			<div class="box" style="top:90%;left:99%">its not much fun being like this. i don't know why this happend to me and you guys too. i thought i was a normal enough person for a long time.</div>
+			<div class="img"><img src="r1.png"></div>
+		</div>
+		<div class="blue column">
+			<div class="img"><img src="b1.png"></div>
+			<div class="box" style="top:36%;left:-120%">All the people on here speak so much truth.</div>
+			<div class="box" style="top:75%;left:-105%">Loneliness is such a tough feeling... it eats at you from the inside of your soul.</div>
+		</div>
+		<div class="green column"><div class="img"><img src="g2a.png"></div></div>
+		<div class="green column"><div class="img"><div class="layers animate"><img class="layer1" src="g2b_ii.jpg"><img class="layer" src="g2b_i.jpg"></div></div></div>
+		<div class="red column">
+			<div class="box" style="top:-3%">
+				i am not a geek or anything i just happend to have my computer as my best friend since the age of 12
+			</div>
+			<div class="box" style="top:20%;left:105%">
+				but now I realized how much I had missed during those yaers
+			</div>
+			<div class="box" style="top:35%;left:150%">
+				all the friends I could of made
+			</div>
+			<div class="box" style="top:40%;left:165%">
+				all the experiences I could of had
+			</div>
+			<div class="green box" style="top:55%;left:120%">The friends I had don't live in my area anymore and are always busy--I email them, and don't hear back for months.</div>
+			<div class="green box" style="top:58%;left:135%">Then I email again and now I think I must be irritating them because I'm needy.</div>
+			<div class="green box" style="top:70%;left:150%">What is missing from our lives? How can we feel complete?</div>
+			<div class="blue box" style="top:75%;left:120%">What am I searching for... I don't know.</div>
+			<div class="blue box" style="top:83%;left:145%">Every sight I behold, every thought I have, is directed towards something that I cannot decide exists or is a madness that lies inside me.</div>
+			<div class="blue box" style="top:98%;left:135%">I feel it is so close, if only I knew where to look.</div>
+			<div class="img"><img src="r2a.jpg"></div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="r2b_iii.jpg"><img class="layer" src="r2b_ii.jpg"><img class="layer" src="r2b_i.jpg"></div></div>
+		</div>
+		<div class="blue column">
+			<div class="box" style="top:50%;left:-90%">I am waiting.</div>
+			<div class="box" style="top:80%;left:-120%">How can life be so beautiful and so ugly at the same time?</div>
+			<div class="img"><img src="b2a.gif"></div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="b2b_iv.png"><img class="layer" src="b2b_iii.png"><img class="layer" src="b2b_ii.png"><img class="layer" src="b2b_i.png"></div></div>
+			<div class="img"><img src="b2c.jpg"></div>
+		</div>
+		<div class="green column">
+			<div class="box" style="top:35%;left:99%">I am so lonely that being around the people I love makes me even more alone.</div>
+			<div class="img"><img src="g3a.jpg"></div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="g3b_iii.jpg"><img class="layer" src="g3b_ii.jpg"><img class="layer" src="g3b_i.jpg"></div></div>
+		</div>
+		<div class="blue column">
+			<div class="box" style="top:15%;left:-100%">He or she that is an individual, with the smallest hint of uniqueness, is doomed to be lonely.</div>
+			<div class="green box" style="top:30%;left:-105%">Why? That's awfully pessimistic.</div>
+			<div class="box" style="top:65%;left:-120%">Because no one can claim that they really understand what it's like to be that person for an entire lifetime.</div>
+			<div class="green box" style="top:80%;left:-95%">What about finding fulfillment from bringing people into your life?</div>
+			<div class="img"><img src="b3a.jpg"></div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="b3b_iii.png"><img class="layer" src="b3b_ii.png"><img class="layer" src="b3b_i.png"></div></div>
+			<div class="img"><img src="b3c.jpg"></div>
+		</div>
+		<div class="red column">
+			<div class="box" style="top:10%;left:110%">yeah. peopel make friends when they get something out of it. its a selfish thing.</div>
+			<div class="green box" style="top:50%;left:180%">Hmm I guess I don't see the world in such bleak terms...</div>
+			<div class="box" style="top:230%;left:135%">im not saying its a bad thing. everone just wants to belong. its what makes them act like idiots.</div>
+			<div class="img"><div class="layers animate">
+			<img class="layer1" src="r3a_ix.jpg">
+			<img class="layer" src="r3a_iix.jpg">
+			<img class="layer" src="r3a_vii.jpg">
+			<img class="layer" src="r3a_vi.jpg">
+			<img class="layer" src="r3a_v.jpg">
+			<img class="layer" src="r3a_iv.jpg">
+			<img class="layer" src="r3a_iii.jpg">
+			<img class="layer" src="r3a_ii.jpg">
+			<img class="layer" src="r3a_i.jpg">
+		</div></div></div>
+		<div class="red column"><div class="img"><img src="r3b.jpg"></div></div>
+		<div class="green column">
+			<div class="green box" style="top:3%;left:-99%">I really should get a therapist to talk to so I don't have to be so desperately needy.</div>
+			<div class="green box" style="top:20%;left:99%">Anyone out there in therapy? How do you go about starting? And how much does it cost?</div>
+			<div class="red box" style="top:40%;left:99%">saw a councellor a couple times. it was okay.</div>
+			<div class="red box" style="top:55%;left:99%">he said that we treat people a certain way to push them away when we really want them near.</div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="g4a_ii.jpg"><img class="layer" src="g4a_i.jpg"></div></div>
+			<div class="img"><img src="g4b.jpg"></div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="g4c_ii.jpg"><img class="layer" src="g4c_i.jpg"></div></div>
+		</div>
+		<div class="green column"><div class="img"><img src="g4d.jpg"></div></div>
+		<div class="blue column">
+			<div class="box" style="top:5%;left:-150%">Complex at its core, simple in its nature, life moves on...</div>
+			<div class="box" style="top:20%;left:-135%">I watch it fly past and reach out to taste its bitter sweetness.</div>
+			<div class="box" style="top:30%;left:-96%">I want to change the world, yet leave it as it is. Broaden the light by turning off the switch.</div>
+			<div class="box" style="top:80%;left:-180%">I would free it if I knew how.</div>
+			<div class="box" style="top:95%;left:-90%">My brain swims and yet it sits... waiting.</div>
+			<div class="green box" style="top:102%;left:-15%">Very profound, Mark71.</div>
+			<div class="img"><img src="b4a.png"></div>
+			<div class="img"><img src="b4b.gif"></div>
+			<div class="img"><img src="b4c.png"></div>
+		</div>
+		<div class="red column">
+			<div class="box" style="top:10%;left:105%">I wish peopel would carry advertisment banners around with them.</div>
+			<div class="box" style="top:30%;left:135%">youd be able to see if anyone is lonely, single or happy, etc.</div>
+			<div class="green box" style="top:35%;left:180%">What would yours say?</div>
+			<div class="box" style="top:53%;left:120%">i dunno. Nothing.</div>
+			<div class="box" style="top:90%;left:99%">can anyone tell me a really good song?<br> a cheer-up song?</div>
+			<div class="blue box" style="top:105%;left:0">The song that cheers me up is that "I wish I was a punk rocker with flowers in my hair" by Sandi Thom.</div>
+			<div class="box" style="top:115%;left:15%">Thats a really nice song. Love the lyrics.</div>
+			<div class="img"><img src="r4a.jpg"></div>
+			<div class="img"><img src="r4b.gif"></div>
+			<div class="img"><img src="r4c.png"></div>
+		</div>
+		<div class="green column">
+			<div class="blue box" style="top:30%;left:105%">There is a movie, you may have seen it.</div>
+			<div class="blue box" style="top:55%;left:99%">About how we get "addicted" to the feelings we are used to, whether or not they are good for us.</div>
+			<div class="blue box" style="top:65%;left:-95%">I think it is true of loneliness as well.</div>
+			<div class="red box" style="top:75%;left:-100%">well Id rather be together with my lonliness than alone with other people</div>
+			<div class="red box" style="top:78%;left:-90%">who wouldn't?</div>
+			<div class="box" style="top:88%;left:-96%">Maybe we would not be so lonely if we stopped expecting things from each other.</div>
+			<div class="box" style="top:115%;left:-96%">We aren't making each other less lonely,</div>
+			<div class="box" style="top:128%;left:105%">all we can offer is...</div>
+			<div class="img"><div class="layers animate"><img class="layer1" src="g50_ii.jpg"><img class="layer" src="g50_i.jpg"></div></div>
+			<div class="img"><img src="g5a.jpg"></div>
+			<div class="img"><img src="g5b.gif"></div>
+			<div class="img"><img src="g5c.jpg"></div>
+			<div class="img"><div class="layers"><img class="layer1" src="glast.jpg"><img class="stick layer" src="gchair.png"></div></div>
+		</div>
+	</div>
+		<div style="height:100vw;width:100vw"> </div>
+		<div style="height:100vh;width:600px"> </div>
+		<div class="filler" style="height:500vh">
+			<div class="ending flip no-fade">
+				<div>
+					<img class="chair_person slide_left" src="rchair.png" style="position:absolute;left:-150px">
+				</div>
+				<div>
+					<img class="chair_person slide_right" src="bchair.png" style="position:absolute;right:-150px">
+				</div>
+			</div>
+		</div>
+		<div class="filler" style="height:100vh">
+			<div class="flip" style="background:#6e6e6e">
+				<div class="closing grey box" style="text-align:center;color:white"><p style="z-index:500">...we are listening.</p></div>
+			</div>
+		</div>
+	</body>
+</html>
