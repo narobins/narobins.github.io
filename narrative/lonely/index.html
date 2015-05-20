@@ -379,14 +379,14 @@
 
 		 			$(".slide_left").each(function() {
 		 				var dist = $window.scrollTop() + $window.height() - $(this).parents(".filler").offset().top;
-		 				if (dist < 150 && dist > 0) {
+		 				if (dist < 300 && dist > 0) {
 			 				var left = Math.max(-150, Math.min(50, $(this).offset().left + (window_top - prev_scroll) / 2));
 			 				$(this).offset({left: left});
 			 			}
 		 			});
 					$(".slide_right").each(function() {
 		 				var dist = $window.scrollTop() + $window.height() - $(this).parents(".filler").offset().top;
-		 				if (dist < 150 && dist > 0) {
+		 				if (dist < 300 && dist > 0) {
 		 					var old = $window.width() - ($(this).offset().left + $(this).width());
 			 				var right = Math.max(-150, Math.min(50, old + (window_top - prev_scroll) / 2));
 			 				$(this).offset({left: $window.width() - right - $(this).width()});
