@@ -6,7 +6,7 @@ html, body {
 }
 
 body {
-	padding-left:180px;
+	padding-left:200px;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -16,14 +16,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 #menu {
-	width:180px;
+	width:200px;
 	height:100vh;
 	margin:0;
 	padding:0;
 	padding-left:20px;
 	padding-top:30px;
 	position:fixed;
-	margin-left:-180px;
+	margin-left:-200px;
 }
 
 #content {
@@ -128,13 +128,13 @@ h1, h2, h3, h4, h5, h6 {
 	max-height:100%;
 }
 
-p {
+#content p {
 	max-width:600px;
 	margin:0 auto;
 	text-align:left;
 }
 
-p.right {
+#content p.right {
 	text-align:right;
 	max-width:none;
 	margin-right:50px;
@@ -196,6 +196,16 @@ li:before {
 	
 #menu li:last-child li:last-child:before {
 	content:"\00a0\00a0\00a0\00a0`-- ";
+}
+
+#menu .faded {
+	color:#aaa;
+}
+
+#menu h1 {
+	font-size:1.8em;
+	margin:20px auto;
+	padding:0;
 }
 
 a {
