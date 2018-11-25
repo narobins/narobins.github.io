@@ -3,6 +3,8 @@
 		<title>three.js canvas - geometry - shapes</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet">
 		<style>
 			body {
 				font-family: Monospace;
@@ -22,9 +24,17 @@
 				height: 90vw;
 				margin: 5vw;
 			}
+			i.material-icons {
+				color: white;
+			}
 		</style>
 	</head>
 	<body>
+<!-- 		<div id='menu'>
+			<i class="material-icons">menu</i>
+			<i class="material-icons">save</i>
+			<i class="material-icons">help</i>
+		</div> -->
 		<div id='container'>
 			<canvas id="canvas"></canvas>
 		</div>
@@ -89,6 +99,8 @@
 			var visualizer;
 			var hueVisualizer;
 
+			onDocumentResize();
+
 			initDim();
 
 			init();
@@ -138,18 +150,18 @@
 				renderer.setSize( bb.width, bb.height );
 				renderer.sortElements = false;
 
-				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
-				document.addEventListener( 'touchstart', onDocumentMouseDown, false );
+				canvas.addEventListener( 'mousedown', onDocumentMouseDown, false );
+				canvas.addEventListener( 'touchstart', onDocumentMouseDown, false );
 
-				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
-				document.addEventListener( 'touchmove', onDocumentMouseMove, false );
+				canvas.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				canvas.addEventListener( 'touchmove', onDocumentMouseMove, false );
 
-				document.addEventListener( 'mouseup', onDocumentMouseUp, false );
-				document.addEventListener( 'touchup', onDocumentMouseUp, false );
+				canvas.addEventListener( 'mouseup', onDocumentMouseUp, false );
+				canvas.addEventListener( 'touchup', onDocumentMouseUp, false );
 
-				document.addEventListener( 'wheel', onDocumentMouseWheel, false );
+				canvas.addEventListener( 'wheel', onDocumentMouseWheel, false );
 				window.addEventListener( 'resize', onDocumentResize, false );
-				document.addEventListener("keypress", onKeyPress, false);
+				canvas.addEventListener("keypress", onKeyPress, false);
 			}
 
 			function checkIntersection(event) {
@@ -278,10 +290,12 @@
 			};
 
 			function onKeyPress() {
+				console.log(event);
 				closeShape();
 			}
 
 			function onDocumentMouseDown(event) {
+				console.log(event);
 				if (rightClick(event)) {
 					hoverObj = checkIntersection(event);
 					if (hoverObj != undefined) {
@@ -316,21 +330,21 @@
 			function onDocumentMouseWheel(event) {
 				hoverObj = checkIntersection(event);
 				if (hoverObj) {
+					var hsl = new THREE.Color();
+					hoverObj.material.color.getHSL(hsl);
 					if (event.deltaY) {
-						var hsl = new THREE.Color();
-						hoverObj.material.color.getHSL(hsl);
-
-						// hoverObj.material.color.setHSL(hsl.h, hsl.s, hsl.l);
-						hoverObj.material.color.setHSL(hsl.h, hsl.s, clamp(hsl.l + 0.05 * clamp(-event.deltaY, -1, 1), 0, 1));
-						// hoverObj.material.color.b = clamp(hoverObj.material.color.b + 0.05 * clamp(event.deltaY, -1, 1), 0, 1);
+						hoverObj.material.color.setHSL(hsl.h, hsl.s, clamp(hsl.l + 0.02 * clamp(-event.deltaY, -1, 1), 0, 1));
 					}
 					if (event.deltaX) {
-						hoverObj.material.color.r = clamp(hoverObj.material.color.r + 0.05 * clamp(event.deltaX, -1, 1), 0, 1);
+						hoverObj.material.color.setHSL(hsl.h, clamp(hsl.s + 0.02 * clamp(-event.deltaX, -1, 1), 0, 1), hsl.l);
 					}
 				}
 			}
 
 			function onDocumentMouseMove() {
+				console.log(event);
+				console.log(event.type);
+				console.log(event.changedTouches);
 				if (event.type == 'touchmove' && event.changedTouches.length == 3) {
 					onDocumentMouseWheel();
 				} else if ((rightClick(event) && hoverObj != undefined) ||
@@ -372,10 +386,12 @@
 			}
 
 			function onDocumentResize() {
-				var dim = window.innerWidth * 0.9;
+				var dim = Math.min(window.innerWidth, window.innerHeight) * 0.9;
 				document.getElementById('canvas').style.width = dim + 'px'
 				document.getElementById('canvas').style.height = dim + 'px'
-				renderer.setSize( dim, dim );
+				if (renderer != undefined) {
+					renderer.setSize( dim, dim );
+				}
 			}
 
 			// Utility
@@ -408,6 +424,7 @@
 				} else {
 					vec.set(event.clientX, event.clientY, 0.5);
 				}
+				console.log(vec);	
 
 				var bb = document.getElementById('canvas').getBoundingClientRect();
 				vec.set(((vec.x - bb.left) / bb.width) * 2 - 1,
