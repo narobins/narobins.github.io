@@ -1,0 +1,422 @@
+<html lang="en">
+	<head>
+		<title>three.js canvas - geometry - shapes</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #202020;
+				margin: 0px;
+				overflow: hidden;
+			}
+			#info {
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				padding: 5px;
+				text-align:center;
+			}
+			#canvas {
+				width: 90vw;
+				height: 90vw;
+				margin: 5vw;
+			}
+		</style>
+	</head>
+	<body>
+		<div id='container'>
+			<canvas id="canvas"></canvas>
+		</div>
+
+		<script src="three.min.js"></script>
+		<!-- <script src="https://threejs.org/build/three.js"></script> -->
+
+		<script id="hueVisualizeVertex" type="x-shader/x-vertex">
+
+		varying vec2 vUv;
+
+		void main() {
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+		}
+
+		</script>
+		<script id="hueVisualizeFragment" type="x-shader/x-fragment">
+
+		varying vec2 vUv;
+		const float pi = 3.14159;
+
+		// All components are in the range [0…1], including hue.
+		vec3 hsv2rgb(vec3 c)
+		{
+			vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+			vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+			return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+		}
+
+		void main() {
+			gl_FragColor = vec4(1.0);
+			vec2 nUv = (vUv.xy - vec2(0.5, 0.5)) * 2.0;
+			if (pow(nUv.x, 2.0) + pow(nUv.y, 2.0) < 0.5) {
+				discard;
+			}
+			gl_FragColor.x = (atan(nUv.y, nUv.x)  ) / (2.0 * pi);
+			gl_FragColor.xyz = hsv2rgb(gl_FragColor.xyz);
+		}
+
+		</script>
+
+		<script>
+			var container;
+			var camera, scene, renderer;
+			var raycaster = new THREE.Raycaster();
+			var mouse = new THREE.Vector2();
+
+			var MAX_POINTS = 500;
+			var DRAG_DIST = 80;
+			var CANVAS_WIDTH;
+			var CANVAS_HEIGHT;
+			var START_COLOR = new THREE.Color("hsl(80, 50%, 80%)");
+			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
+
+			var pos_idx = 0;
+			var currentLine = false;
+			var draggingPt = false;
+			var hueShiftColor;
+			var squareShape;
+
+			var visualizer;
+			var hueVisualizer;
+
+			initDim();
+
+			init();
+			animate();
+
+			function initDim() {
+				bb = document.getElementById('canvas').getBoundingClientRect();
+				CANVAS_WIDTH = bb.width;
+				CANVAS_HEIGHT = bb.height;
+			}
+
+			function init() {
+				container = document.getElementById( 'container' );
+				var bb = document.getElementById('canvas').getBoundingClientRect();
+
+				var aspect = bb.width / bb.height;
+				var frustumSize = bb.height;
+				console.log(frustumSize);
+
+				// camera
+				camera = new THREE.OrthographicCamera(
+					frustumSize * aspect / - 2,
+					frustumSize * aspect / 2,
+					frustumSize / 2,
+					frustumSize / - 2,
+					1,
+					2000 );
+				camera.rotation.x = 0;
+				camera.rotation.y = 0;
+				camera.rotation.z = 0;
+				camera.position.x = 0;
+				camera.position.y = 0;
+				camera.position.z = 100;
+
+				scene = new THREE.Scene();
+
+				// setup doc
+				squareShape = new THREE.PlaneGeometry(CANVAS_WIDTH, CANVAS_HEIGHT)
+				var squareMaterial = new THREE.MeshBasicMaterial( { color: START_COLOR } );
+				scene.add(new THREE.Mesh(squareShape, squareMaterial));
+
+				// renderer stuff
+				canvas = document.getElementById('canvas');
+
+				renderer = new THREE.WebGLRenderer({canvas: canvas});
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( bb.width, bb.height );
+				renderer.sortElements = false;
+
+				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+				document.addEventListener( 'wheel', onDocumentMouseWheel, false );
+				window.addEventListener( 'resize', onDocumentResize, false );
+				document.addEventListener("keypress", onKeyPress, false);
+			}
+
+			function checkIntersection(event) {
+				var mouse = mouseToCanvasPt();
+				return intersectPt(mouse);
+			}
+
+			function startNewShape() {
+				var geometry = new THREE.BufferGeometry();
+				var positions = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
+				geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+				drawCount = 0; // draw the first 2 points, only
+				geometry.setDrawRange( 0, 0 );
+
+				var material = new THREE.LineBasicMaterial( { color: 0xbbbbbb, linewidth: 1 } );
+				currentLine = new THREE.Line( geometry,  material );
+				scene.add( currentLine );
+			}
+
+			function addPoint(x, y) {
+				if (!currentLine) {
+					startNewShape();
+				}
+				var positions = currentLine.geometry.attributes.position.array;
+
+				positions[ pos_idx ++ ] = x;
+				positions[ pos_idx ++ ] = y;
+				positions[ pos_idx ++ ] = 0;
+
+				currentLine.geometry.setDrawRange( 0, pos_idx / 3 );
+				currentLine.geometry.attributes.position.needsUpdate = true;
+			}
+
+			function avgSampleColors(pts) {
+				var sample;
+				var avg = new THREE.Color(0,0,0);
+				var quarter = Math.floor(Math.max(8, pts.length) / 8);
+				var nSamples = 0;
+
+				for (var j = 0; j < pts.length; j+=quarter) {
+					sample = intersectPt(canvasPt(pts[j]));
+					if (sample != undefined) {
+						nSamples += 1;
+						avg.add(sample.material.color);
+					}
+				}
+				return avg.multiplyScalar(1.0 / nSamples);				
+			}
+
+			function offsetRandom(scale, offset) {
+				return (2 * Math.round(Math.random()) - 1) * ((Math.random() * scale) + offset);
+			}
+			
+			function closeShape() {
+				var positions = currentLine.geometry.attributes.position.array;
+				positions[ pos_idx ++ ] = positions[0];
+				positions[ pos_idx ++ ] = positions[1];
+				positions[ pos_idx ++ ] = positions[2];
+
+				scene.remove(currentLine);
+
+				// make closed shape from line pts
+				var pts = [];
+				for (var i = 0; i < pos_idx; i+=3) {
+					pts.push(new THREE.Vector2( positions[i], positions[i+1] ));
+				}
+
+				var avg = avgSampleColors(pts);
+				avg.offsetHSL(offsetRandom(0.03, 0.02), offsetRandom(0.05, 0.03), offsetRandom(0.04, 0.06));
+
+				var shape = new THREE.Shape(pts);
+				var geometry = new THREE.ShapeBufferGeometry( shape );
+				var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ) );
+				scene.add(mesh);
+
+				pos_idx = 0;
+				currentLine = false;
+			}
+
+			function visualizePt(vec, c) {
+				var geometry = new THREE.CircleGeometry( 10, 4 );
+				var material = new THREE.MeshBasicMaterial({color:c});
+				pt = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({color:c}) );
+				pt.position.x = vec.x;
+				pt.position.y = vec.y;
+				scene.add( pt );
+			}
+
+			function visualizeHue(vec, c) {
+				var geometry = new THREE.CircleGeometry( 20, 24 );
+				var material = new THREE.ShaderMaterial({
+					vertexShader: document.getElementById('hueVisualizeVertex').textContent,
+					fragmentShader: document.getElementById('hueVisualizeFragment').textContent,
+					depthWrite: false,
+					depthTest: false
+				});
+				hueVisualizer = new THREE.Mesh( geometry, material );
+				hueVisualizer.position.x = vec.x;
+				hueVisualizer.position.y = vec.y;
+				scene.add( hueVisualizer );
+			}
+
+			function visualizeLine(vec, c) {
+				var geometry = new THREE.Geometry();
+				geometry.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
+				geometry.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
+
+				visualizer = new THREE.Line( geometry, new THREE.LineBasicMaterial( { color: 0xffffff } ) );
+				scene.add( visualizer );
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				render();
+			}
+
+			function render() {
+				renderer.render( scene, camera );
+			}
+
+			// Events
+			///////////////////////////////////////////////////////////////////
+			// disable right click menu
+			document.oncontextmenu = function () {
+				return false;
+			};
+
+			function onKeyPress() {
+				closeShape();
+			}
+
+			function onDocumentMouseDown(event) {
+				if (rightClick(event)) {
+					hoverObj = checkIntersection(event);
+					if (hoverObj != undefined) {
+						hueShiftColor = hoverObj.material.color.clone();
+						visualizeLine(currentPt(), new THREE.Color(0, 0, 0));
+						visualizeHue(currentPt(), '#ff0000');
+						event.preventDefault();
+						event.stopPropagation();
+					}
+				} else {
+					if (draggingPt) {
+						console.log('dragging');
+					} else {
+						var vec = currentPt();
+						draggingPt = vec;
+						addPoint(vec.x, vec.y);
+					}
+				}
+			}
+
+			function onDocumentMouseUp() {
+				if (rightClick(event)) {
+					scene.remove(visualizer);
+					scene.remove(hueVisualizer);
+					return false;
+				} else {
+					draggingPt = false;
+				}
+			}
+
+			function onDocumentMouseWheel(event) {
+				hoverObj = checkIntersection(event);
+				if (hoverObj) {
+					if (event.deltaY) {
+						var hsl = new THREE.Color();
+						hoverObj.material.color.getHSL(hsl);
+
+						// hoverObj.material.color.setHSL(hsl.h, hsl.s, hsl.l);
+						hoverObj.material.color.setHSL(hsl.h, hsl.s, clamp(hsl.l + 0.05 * clamp(-event.deltaY, -1, 1), 0, 1));
+						// hoverObj.material.color.b = clamp(hoverObj.material.color.b + 0.05 * clamp(event.deltaY, -1, 1), 0, 1);
+					}
+					if (event.deltaX) {
+						hoverObj.material.color.r = clamp(hoverObj.material.color.r + 0.05 * clamp(event.deltaX, -1, 1), 0, 1);
+					}
+				}
+			}
+
+			function onDocumentMouseMove() {
+				if (rightClick(event) && hoverObj != undefined) {
+					var vec = currentPt();
+					vec.z = 0;
+					visualizer.geometry.vertices[1].x = vec.x;
+					visualizer.geometry.vertices[1].y = vec.y;
+					visualizer.geometry.verticesNeedUpdate = true;
+					var diff = new THREE.Vector2(
+						visualizer.geometry.vertices[1].x - visualizer.geometry.vertices[0].x,
+						visualizer.geometry.vertices[1].y - visualizer.geometry.vertices[0].y,
+					);
+					var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
+					var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
+
+					hoverObj.material.color.set(hueShiftColor);
+
+					// adjust hue in a copy of the color
+					var offsetColor = new THREE.Color();
+					hoverObj.material.color.getHSL(offsetColor);
+					offsetColor.setHSL(degrees, 1.0, offsetColor.l);
+
+					// mix offset color back into original color
+					offsetColor.multiplyScalar(amount);
+					hoverObj.material.color.multiplyScalar(1.0 - amount);
+					hoverObj.material.color.add(offsetColor);
+
+					// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
+				} else {
+					if (draggingPt) {
+						var vec = currentPt();
+						if (sqdist(vec, draggingPt) > DRAG_DIST) {
+							console.log(sqdist(vec, draggingPt));
+							draggingPt = vec;
+							addPoint(vec.x, vec.y);
+						}
+					}
+				}
+			}
+
+			function onDocumentResize() {
+				var dim = window.innerWidth * 0.9;
+				document.getElementById('canvas').style.width = dim + 'px'
+				document.getElementById('canvas').style.height = dim + 'px'
+				renderer.setSize( dim, dim );
+			}
+
+			// Utility
+			///////////////////////////////////////////////////////////////////
+			function intersectPt(pt) {
+				raycaster.setFromCamera( pt, camera );
+				var intersects = raycaster.intersectObjects( [ scene ], true );
+				if ( intersects.length > 0 ) {
+					// assuming that ids are incremented with each new object
+					intersects.sort((a, b) => b.object.id - a.object.id);
+					return intersects[ 0 ].object;
+				} else {
+					console.log('no intersect');
+				}
+			}
+
+			function canvasPt(v) {
+				var vec = new THREE.Vector3(); // create once and reuse
+				var bb = document.getElementById('canvas').getBoundingClientRect();
+				vec.set(((v.x) / bb.width) * 2,
+					(-(v.y) / bb.height) * 2,
+					0.5 );
+				return vec;
+			}
+			function mouseToCanvasPt() {
+				var vec = new THREE.Vector3(); // create once and reuse
+
+				var bb = document.getElementById('canvas').getBoundingClientRect();
+				vec.set(((event.clientX - bb.left) / bb.width) * 2 - 1,
+					(-(event.clientY - bb.top) / bb.height) * 2 + 1,
+					0.5 );
+				return vec;
+			}
+			function currentPt() {
+				var vec = mouseToCanvasPt();
+				vec.unproject( camera );
+				vec.x = Math.max(-CANVAS_WIDTH / 2.0, Math.min(vec.x, CANVAS_WIDTH / 2.0));
+				vec.y = Math.max(-CANVAS_HEIGHT / 2.0, Math.min(vec.y, CANVAS_HEIGHT / 2.0));
+				return vec;
+			}
+			function sqdist(v1, v2) {
+				return (v1.x - v2.x) ** 2 + (v1.x - v2.x) ** 2;
+			}
+			function clamp(v, a, b) {
+				return Math.min(Math.max(v, a), b);
+			}
+			function rightClick(event) {
+				return ('which' in event) ? event.which == 3 : event.button == 2;
+			}
+		</script>
+
+	</body>
+</html>
