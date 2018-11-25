@@ -139,8 +139,14 @@
 				renderer.sortElements = false;
 
 				document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+				document.addEventListener( 'touchstart', onDocumentMouseDown, false );
+
 				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+				document.addEventListener( 'touchmove', onDocumentMouseMove, false );
+
 				document.addEventListener( 'mouseup', onDocumentMouseUp, false );
+				document.addEventListener( 'touchup', onDocumentMouseUp, false );
+
 				document.addEventListener( 'wheel', onDocumentMouseWheel, false );
 				window.addEventListener( 'resize', onDocumentResize, false );
 				document.addEventListener("keypress", onKeyPress, false);
@@ -290,6 +296,7 @@
 						console.log('dragging');
 					} else {
 						var vec = currentPt();
+						console.log(vec);
 						draggingPt = vec;
 						addPoint(vec.x, vec.y);
 					}
@@ -324,7 +331,10 @@
 			}
 
 			function onDocumentMouseMove() {
-				if (rightClick(event) && hoverObj != undefined) {
+				if (event.type == 'touchmove' && event.changedTouches.length == 3) {
+					onDocumentMouseWheel();
+				} else if ((rightClick(event) && hoverObj != undefined) ||
+						(event.type == 'touchmove' && event.changedTouches.length == 2)) {
 					var vec = currentPt();
 					vec.z = 0;
 					visualizer.geometry.vertices[1].x = vec.x;
@@ -354,7 +364,6 @@
 					if (draggingPt) {
 						var vec = currentPt();
 						if (sqdist(vec, draggingPt) > DRAG_DIST) {
-							console.log(sqdist(vec, draggingPt));
 							draggingPt = vec;
 							addPoint(vec.x, vec.y);
 						}
@@ -394,9 +403,15 @@
 			function mouseToCanvasPt() {
 				var vec = new THREE.Vector3(); // create once and reuse
 
+				if (event.changedTouches != undefined) {
+					vec.set(event.changedTouches[0].clientX, event.changedTouches[0].clientY, 0.5);
+				} else {
+					vec.set(event.clientX, event.clientY, 0.5);
+				}
+
 				var bb = document.getElementById('canvas').getBoundingClientRect();
-				vec.set(((event.clientX - bb.left) / bb.width) * 2 - 1,
-					(-(event.clientY - bb.top) / bb.height) * 2 + 1,
+				vec.set(((vec.x - bb.left) / bb.width) * 2 - 1,
+					(-(vec.y - bb.top) / bb.height) * 2 + 1,
 					0.5 );
 				return vec;
 			}
