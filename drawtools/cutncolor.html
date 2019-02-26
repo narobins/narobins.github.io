@@ -40,13 +40,25 @@
 				right: 0;
 				position: absolute;
 			}
-			#toggle-menu {
+			#icons {
 				position: fixed;
 				left: 0;
 				top: 0;
 				font-size: 18pt;
 				cursor: pointer;
 				padding: 10px;
+				width: 24px;
+			}
+			#icons a {
+				width: 24px;
+				height: 24px;
+				float: left;
+				background: rgba(255, 255, 255, 0.1);
+				margin: 3px;
+				padding: 3px;
+			}
+			#icons a.active {
+				background: rgba(255, 255, 255, 0.25);
 			}
 			.close {
 				float: right;
@@ -65,17 +77,22 @@
 		</style>
 	</head>
 	<body>
-		<a id="toggle-menu" onClick="toggleModal()">?</a>
+		<div id="icons">
+			<a id="toggle-menu" onClick="toggleModal()">?</a>
+			<a id="draw-tool" class="active" onClick="drawTool()"><i class="material-icons">edit</i></a>
+			<a id="transform-tool" onClick="transformTool()"><i class="material-icons">open_with</i></a>
+		</div>
 		<div id="menu">
 			<div id="menu-container">
 				<i class="material-icons close" onClick="toggleModal()">close</i>
-				<h2>Thought</h2>
-				<p>What if drawing interfaces were built to emphasize design principles (shape, composition, color) rather than mimicking physical media?</p>
+				<!-- <h2>Thought</h2> -->
+				<p>What if drawing interfaces emphasized design principles, such as shape, composition, and color, instead of mimicking physical media?</p>
 				<h2>Usage</h2>
-				<p>Click/drag to draw shape, double click to close</p>
-				<p>Right click and drag to shift hue</p>
-				<p>Scroll up/down to shift value</p>
-				<p>Scroll left/right to shift saturation</p>
+				<p>Left click drag: draw shape</p>
+				<p>Double click: close shape</p>
+				<p>Right click drag: shift hue</p>
+				<p>Vertical scroll shift value</p>
+				<p>Horizontal scroll: shift saturation</p>
 				<br />
 				<p class="icons">
 					<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
@@ -137,12 +154,19 @@
 			var CANVAS_HEIGHT;
 			var START_COLOR = new THREE.Color("hsl(80, 50%, 80%)");
 			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
+			var MODE = 'draw';
 
+			// draw
 			var pos_idx = 0;
 			var currentLine = false;
 			var prevPt = false;
 			var hueShiftColor;
 			var squareShape;
+
+			// transform
+			var startTransformPt = false;
+			var startTransformPos = false;
+			var currentObj = false;
 
 			var latestTap = new Date().getTime();
 			var latestDrag = false;
@@ -150,6 +174,7 @@
 
 			var visualizer = false;
 			var hueVisualizer = false;
+
 
 			onDocumentResize();
 
@@ -166,6 +191,20 @@
 				else {
 					menu.style.display = "block";
 				}
+			}
+
+			function drawTool() {
+				document.getElementById("draw-tool").className = "active";
+				document.getElementById("transform-tool").className = "";
+				document.getElementById("toggle-menu").className = "";
+				MODE = 'draw';
+			}
+
+			function transformTool() {
+				document.getElementById("draw-tool").className = "";
+				document.getElementById("transform-tool").className = "active";
+				document.getElementById("toggle-menu").className = "";
+				MODE = 'transform';
 			}
 
 			function initDim() {
@@ -319,8 +358,6 @@
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 
-				console.log("making visualizer");
-
 				visualizer = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: 0x000000 } ) );
 				scene.add( visualizer );
 
@@ -346,12 +383,19 @@
 				renderer.render( scene, camera );
 			}
 
+			// Transform
+			///////////////////////////////////////////////////////////////////
+			function moveShape(shape, delta) {
+				shape.position.x = startTransformPos.x + delta.x;
+				shape.position.y = startTransformPos.y + delta.y;
+				
+			}
 			// Events
 			///////////////////////////////////////////////////////////////////
 			// disable right click menu
-			document.oncontextmenu = function () {
-				return false;
-			};
+			// document.oncontextmenu = function () {
+			// 	return false;
+			// };
 
 			function saveCanvas() {
 				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
@@ -381,99 +425,117 @@
 			}
 
 			function onDocumentMouseDown(event) {
-				debugEvent(event);
-				if (event.type === "mousedown" || event.touches !== undefined) {
-					console.log("down");
+				if (MODE == 'draw') {
+					debugEvent(event);
+					if (event.type === "mousedown" || event.touches !== undefined) {
 
-					var now = new Date().getTime();
-					var since = now - latestTap;
-					latestTap = new Date().getTime();
+						var now = new Date().getTime();
+						var since = now - latestTap;
+						latestTap = new Date().getTime();
 
-					if ((since < 200) && since > 0) {
-						if (event.touches == undefined || event.touches.length == 1) {
-							// double click > close shape, but only for mouse or single finger				
-							console.log(since);
-							closeShape();
+						if ((since < 200) && since > 0) {
+							if (event.touches == undefined || event.touches.length == 1) {
+								// double click > close shape, but only for mouse or single finger				
+								closeShape();
+							}
+
+						} else if (rightClick(event) || event.type == "touchstart" && event.touches.length == 2) {
+							// right click or double finger drag > shift hue
+							startHueShift(event);
+
+						} else {
+							// add point 
+							var vec = currentPt();
+							prevPt = vec;
+							addPoint(vec.x, vec.y);
 						}
-
-					} else if (rightClick(event) || event.type == "touchstart" && event.touches.length == 2) {
-						// right click or double finger drag > shift hue
-						startHueShift(event);
-
-					} else {
-						// add point 
-						var vec = currentPt();
-						prevPt = vec;
-						addPoint(vec.x, vec.y);
+						event.preventDefault();
 					}
-					event.preventDefault();
+				} else if (MODE == 'transform') {
+					currentObj = checkIntersection(event);
+					var vec = currentPt();
+					startTransformPt = vec;
+					startTransformPos = new THREE.Vector2();
+					startTransformPos.copy(currentObj.position);
 				}
 			}
 
 			function onDocumentMouseMove(event) {
-				debugEvent(event);
+				if (MODE == 'draw') {
+					debugEvent(event);
 
-				if (event.type == "touchmove" && event.touches.length == 3) {
-					prevPt = false;
-					onDocumentMouseWheel(event);
+					if (event.type == "touchmove" && event.touches.length == 3) {
+						prevPt = false;
+						onDocumentMouseWheel(event);
 
-				} else if ((rightClick(event) ||
-						(event.type == "touchmove" && event.touches.length == 2))) {
+					} else if ((rightClick(event) ||
+							(event.type == "touchmove" && event.touches.length == 2))) {
 
-					if (!hoverObj || !visualizer) {
-						startHueShift();
-					}
-					
-					clearLine();
-					prevPt = false;
-					var vec = currentPt();
-					vec.z = 0;
-					visualizer.geometry.vertices[1].x = vec.x;
-					visualizer.geometry.vertices[1].y = vec.y;
-					console.log(visualizer.geometry.vertices);
-					visualizer.geometry.verticesNeedUpdate = true;
-					var diff = new THREE.Vector2(
-						visualizer.geometry.vertices[1].x - visualizer.geometry.vertices[0].x,
-						visualizer.geometry.vertices[1].y - visualizer.geometry.vertices[0].y,
-					);
-					var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
-					var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
-
-					hoverObj.material.color.set(hueShiftColor);
-
-					// adjust hue in a copy of the color
-					var offsetColor = new THREE.Color();
-					hoverObj.material.color.getHSL(offsetColor);
-					offsetColor.setHSL(degrees, 1.0, offsetColor.l);
-
-					// mix offset color back into original color
-					console.log(amount);
-					offsetColor.multiplyScalar(amount);
-					hoverObj.material.color.multiplyScalar(1.0 - amount);
-					hoverObj.material.color.add(offsetColor);
-					console.log(hoverObj.material.color);
-					event.preventDefault();
-
-					// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
-				} else if ((event.type == "mousemove" || event.touches.length == 1)) {
-					if (prevPt) {
-						// console.log("has dragging pt");
-						var vec = currentPt();
-						if (sqdist(vec, prevPt) > PREV_DIST) {
-							prevPt = vec;
-							addPoint(vec.x, vec.y);
+						if (!hoverObj || !visualizer) {
+							startHueShift();
 						}
-					} else {
-						// console.log("no action");
+						
+						clearLine();
+						prevPt = false;
+						var vec = currentPt();
+						vec.z = 0;
+						visualizer.geometry.vertices[1].x = vec.x;
+						visualizer.geometry.vertices[1].y = vec.y;
+						visualizer.geometry.verticesNeedUpdate = true;
+						var diff = new THREE.Vector2(
+							visualizer.geometry.vertices[1].x - visualizer.geometry.vertices[0].x,
+							visualizer.geometry.vertices[1].y - visualizer.geometry.vertices[0].y,
+						);
+						var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
+						var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
+
+						hoverObj.material.color.set(hueShiftColor);
+
+						// adjust hue in a copy of the color
+						var offsetColor = new THREE.Color();
+						hoverObj.material.color.getHSL(offsetColor);
+						offsetColor.setHSL(degrees, 1.0, offsetColor.l);
+
+						// mix offset color back into original color
+						offsetColor.multiplyScalar(amount);
+						hoverObj.material.color.multiplyScalar(1.0 - amount);
+						hoverObj.material.color.add(offsetColor);
+						event.preventDefault();
+
+						// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
+					} else if ((event.type == "mousemove" || event.touches.length == 1)) {
+						if (prevPt) {
+							// console.log("has dragging pt");
+							var vec = currentPt();
+							if (sqdist(vec, prevPt) > PREV_DIST) {
+								prevPt = vec;
+								addPoint(vec.x, vec.y);
+							}
+						} else {
+							// console.log("no action");
+						}
+					}
+				} else if (MODE == 'transform') {
+					if (checkIntersection(event)) {
+						document.body.style.cursor = 'pointer';
+					}
+					if (currentObj && startTransformPt) {
+						var vec = currentPt();
+						vec.sub(startTransformPt);
+						moveShape(currentObj, vec);
 					}
 				}
 			}
 
 			function onDocumentMouseUp(event) {
 				debugEvent(event);
-				console.log("up");
 
+				// clear draw
 				clearHueShift()
+
+				// clear transform
+				startTransformPt = false;
+				currentObj = false;
 
 				if (event.type == "mouseup" || event.touches.length == 0) {
 					prevPt = false;
@@ -482,24 +544,26 @@
 			}
 
 			function onDocumentMouseWheel(event) {
-				debugEvent(event);
+				if (MODE == 'draw') {
+					clearHueShift();
+					clearLine();
 
-				clearHueShift();
-				clearLine();
+					var delta = mouseDelta();
+					if (delta) {
+						hoverObj = checkIntersection(event);
+						if (hoverObj) {
+							var hsl = new THREE.Color();
+							hsl = hoverObj.material.color.getHSL(hsl);
+							var deltaS = delta.x ? clamp(hsl.s + delta.x, 0, 1) : hsl.s;
+							var deltaL = delta.y ? clamp(hsl.l + delta.y, 0, 1) : hsl.l;
 
-				var delta = mouseDelta();
-				if (delta) {
-					hoverObj = checkIntersection(event);
-					if (hoverObj) {
-						console.log(delta);
-						var hsl = new THREE.Color();
-						hsl = hoverObj.material.color.getHSL(hsl);
-						var deltaS = delta.x ? clamp(hsl.s + delta.x, 0, 1) : hsl.s;
-						var deltaL = delta.y ? clamp(hsl.l + delta.y, 0, 1) : hsl.l;
-
-						hoverObj.material.color.setHSL(hsl.h, deltaS, deltaL);
-						console.log(hoverObj.material.color);
+							hoverObj.material.color.setHSL(hsl.h, deltaS, deltaL);
+						}
 					}
+				} else if (MODE == 'transform') {
+					var hoverObj = checkIntersection(event);
+					var delta = mouseDelta();
+					hoverObj.position.z = hoverObj.position.z + (delta.y < 0 ? -1 : 1);
 				}
 				event.preventDefault();
 			}
@@ -547,9 +611,7 @@
 					// assuming that ids are incremented with each new object
 					intersects.sort((a, b) => b.object.id - a.object.id);
 					return intersects[ 0 ].object;
-				} else {
-					console.log("no intersect");
-				}
+				} 
 			}
 
 			function canvasPt(v) {
