@@ -161,7 +161,7 @@
 			var currentLine = false;
 			var prevPt = false;
 			var hueShiftColor;
-			var squareShape;
+			var squareBG;
 
 			// transform
 			var startTransformPt = false;
@@ -175,6 +175,8 @@
 			var visualizer = false;
 			var hueVisualizer = false;
 
+			var zCount = 1;
+			var MAX_ZDEPTH = 1000;
 
 			onDocumentResize();
 
@@ -227,20 +229,22 @@
 					frustumSize / 2,
 					frustumSize / - 2,
 					1,
-					2000 );
+					2 * MAX_ZDEPTH + 1 );
 				camera.rotation.x = 0;
 				camera.rotation.y = 0;
 				camera.rotation.z = 0;
 				camera.position.x = 0;
 				camera.position.y = 0;
-				camera.position.z = 100;
+				camera.position.z = MAX_ZDEPTH + 1;
 
 				scene = new THREE.Scene();
 
 				// setup doc
-				squareShape = new THREE.PlaneGeometry(CANVAS_WIDTH, CANVAS_HEIGHT)
+				var squareMesh = new THREE.PlaneGeometry(CANVAS_WIDTH, CANVAS_HEIGHT)
 				var squareMaterial = new THREE.MeshBasicMaterial( { color: START_COLOR } );
-				scene.add(new THREE.Mesh(squareShape, squareMaterial));
+				squareBG = new THREE.Mesh(squareMesh, squareMaterial);
+				squareBG.position.z = -MAX_ZDEPTH;
+				scene.add(squareBG);
 
 				// renderer stuff
 				canvas = document.getElementById("canvas");
@@ -282,6 +286,7 @@
 
 				var material = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 1 } );
 				currentLine = new THREE.Line( geometry,  material );
+				currentLine.position.z = zCount;
 				scene.add( currentLine );
 			}
 
@@ -312,13 +317,13 @@
 						avg.add(sample.material.color);
 					}
 				}
-				return avg.multiplyScalar(1.0 / nSamples);				
+				return avg.multiplyScalar(1.0 / nSamples);
 			}
 
 			function offsetRandom(scale, offset) {
 				return (2 * Math.round(Math.random()) - 1) * ((Math.random() * scale) + offset);
 			}
-			
+
 			function closeShape() {
 				if (currentLine) {
 					var positions = currentLine.geometry.attributes.position.array;
@@ -339,7 +344,8 @@
 					var geometry = new THREE.ShapeBufferGeometry( shape );
 					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ) );
 					scene.add(mesh);
-
+					mesh.position.z = zCount;
+					zCount++;
 					clearLine();
 				}
 			}
@@ -350,6 +356,8 @@
 				pt = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({color:c}) );
 				pt.position.x = vec.x;
 				pt.position.y = vec.y;
+				pt.position.z = MAX_ZDEPTH;
+
 				scene.add( pt );
 			}
 
@@ -359,6 +367,7 @@
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 
 				visualizer = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: 0x000000 } ) );
+				visualizer.position.z = zCount;
 				scene.add( visualizer );
 
 				var circleGeo = new THREE.CircleGeometry( 20, 24 );
@@ -388,7 +397,7 @@
 			function moveShape(shape, delta) {
 				shape.position.x = startTransformPos.x + delta.x;
 				shape.position.y = startTransformPos.y + delta.y;
-				
+
 			}
 			// Events
 			///////////////////////////////////////////////////////////////////
@@ -412,10 +421,9 @@
 				clearLine();
 				try {
 					hoverObj = checkIntersection(event);
-					if (hoverObj) {
+					if (hoverObj && hoverObj.material.color) {
 						hueShiftColor = hoverObj.material.color.clone();
 						visualizeLine(currentPt(), new THREE.Color(0, 0, 0));
-						visualizeHue(currentPt());
 						event.preventDefault();
 						event.stopPropagation();
 					}
@@ -435,7 +443,7 @@
 
 						if ((since < 200) && since > 0) {
 							if (event.touches == undefined || event.touches.length == 1) {
-								// double click > close shape, but only for mouse or single finger				
+								// double click > close shape, but only for mouse or single finger
 								closeShape();
 							}
 
@@ -444,7 +452,7 @@
 							startHueShift(event);
 
 						} else {
-							// add point 
+							// add point
 							var vec = currentPt();
 							prevPt = vec;
 							addPoint(vec.x, vec.y);
@@ -452,11 +460,14 @@
 						event.preventDefault();
 					}
 				} else if (MODE == 'transform') {
-					currentObj = checkIntersection(event);
-					var vec = currentPt();
-					startTransformPt = vec;
-					startTransformPos = new THREE.Vector2();
-					startTransformPos.copy(currentObj.position);
+					var intersected = checkIntersection(event);
+					if (intersected.id != squareBG.id) {
+						currentObj = intersected;
+						var vec = currentPt();
+						startTransformPt = vec;
+						startTransformPos = new THREE.Vector2();
+						startTransformPos.copy(currentObj.position);
+					}
 				}
 			}
 
@@ -474,7 +485,7 @@
 						if (!hoverObj || !visualizer) {
 							startHueShift();
 						}
-						
+
 						clearLine();
 						prevPt = false;
 						var vec = currentPt();
@@ -505,23 +516,23 @@
 						// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
 					} else if ((event.type == "mousemove" || event.touches.length == 1)) {
 						if (prevPt) {
-							// console.log("has dragging pt");
 							var vec = currentPt();
 							if (sqdist(vec, prevPt) > PREV_DIST) {
 								prevPt = vec;
 								addPoint(vec.x, vec.y);
 							}
-						} else {
-							// console.log("no action");
 						}
 					}
 				} else if (MODE == 'transform') {
-					if (checkIntersection(event)) {
+					var intersected = checkIntersection(event);
+					if (intersected && intersected.id != squareBG.id) {
 						document.body.style.cursor = 'pointer';
+					} else {
+						document.body.style.cursor = 'auto';
 					}
 					if (currentObj && startTransformPt) {
 						var vec = currentPt();
-						vec.sub(startTransformPt);
+						vec.sub(startTransformPt)
 						moveShape(currentObj, vec);
 					}
 				}
@@ -561,9 +572,12 @@
 						}
 					}
 				} else if (MODE == 'transform') {
-					var hoverObj = checkIntersection(event);
-					var delta = mouseDelta();
-					hoverObj.position.z = hoverObj.position.z + (delta.y < 0 ? -1 : 1);
+					var intersected = checkIntersection(event);
+					if (intersected.id != squareBG.id) {
+						var delta = mouseDelta();
+						intersected.position.z = intersected.position.z + (delta.y < 0 ? -1 : 1);
+						zCount = Math.max(intersected.position.z, zCount);
+					}
 				}
 				event.preventDefault();
 			}
@@ -603,15 +617,15 @@
 				}
 			}
 
-
 			function intersectPt(pt) {
 				raycaster.setFromCamera( pt, camera );
 				var intersects = raycaster.intersectObjects( [ scene ], true );
 				if ( intersects.length > 0 ) {
 					// assuming that ids are incremented with each new object
+					// intersects.sort((a, b) => b.object.position.z - a.object.position.z);
 					intersects.sort((a, b) => b.object.id - a.object.id);
 					return intersects[ 0 ].object;
-				} 
+				}
 			}
 
 			function canvasPt(v) {
@@ -641,10 +655,10 @@
 				} else {
 					// mouse
 					return {
-						x: 0.02 * clamp(-event.deltaX, -1, 1), 
+						x: 0.02 * clamp(-event.deltaX, -1, 1),
 						y: 0.02 * clamp(-event.deltaY, -1, 1)
 					};
-				} 
+				}
 			}
 
 			function mouseToCanvasPt() {
@@ -653,8 +667,8 @@
 				if (event.touches != undefined) {
 					// average all the touch coordinates
 					var touches = Object.values(event.touches);
-					vec.set(touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length, 
-						touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length, 
+					vec.set(touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length,
+						touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length,
 						0.5);
 					// vec.set(event.touches[0].clientX, event.touches[0].clientY, 0.5);
 				} else {
