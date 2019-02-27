@@ -575,12 +575,13 @@
 					var intersected = checkIntersection(event);
 					if (intersected.id != squareBG.id) {
 						var delta = mouseDelta();
-						intersected.position.z = intersected.position.z + (delta.y < 0 ? -1 : 1);
+						intersected.position.z = intersected.position.z + (delta.y > 0 ? -1 : 1);
 						zCount = Math.max(intersected.position.z, zCount);
 					}
 				}
 				event.preventDefault();
 			}
+
 			function debugEvent(event) {
 				// console.log(event.type);
 				// console.log(event.touches.length);
@@ -622,8 +623,8 @@
 				var intersects = raycaster.intersectObjects( [ scene ], true );
 				if ( intersects.length > 0 ) {
 					// assuming that ids are incremented with each new object
-					// intersects.sort((a, b) => b.object.position.z - a.object.position.z);
-					intersects.sort((a, b) => b.object.id - a.object.id);
+					intersects.sort((a, b) => b.object.position.z - a.object.position.z);
+					// intersects.sort((a, b) => b.object.id - a.object.id);
 					return intersects[ 0 ].object;
 				}
 			}
