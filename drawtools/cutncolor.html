@@ -13,23 +13,22 @@
 				overflow: hidden;
 				color: white;
 				text-align: center;
+				position: relative;
 			}
 			#canvas {
 				width: 84vw;
 				height: 84vw;
 				margin: 8vw auto;
 			}
-			i.material-icons {
-			}
 			#menu {
 				display: none;
 				opacity: 0.5;
 				background: black;
 				position: fixed;
-				left: 25vw;
-				top: 25vh;
-				width: 50vw;
-				height: 50vh;
+				left: 20vw;
+				top: 20vh;
+				width: 60vw;
+				height: 60vh;
 				text-align: left;
 			}
 			#menu #menu-container {
@@ -43,22 +42,62 @@
 			#icons {
 				position: fixed;
 				left: 0;
+				width: 50px;
+				height: 50px;
+				padding: 0;
+				margin: 20px;
+			}
+			#icons a {
+				float: left;
+				background: rgba(255, 255, 255, 0.15);
+				opacity: 0.7;
+				margin: 0;
+				padding: 5px;
+				width: 40px;
+				height: 40px;
+				cursor: pointer;
+				display: none;
+			}
+			@media only screen and (orientation: landscape) {
+				#icons {
+					top: 50%;
+					margin-top: -75px;
+					height: 150px;
+				}
+				#icons a {
+					height: 140px;
+					vertical-align: middle;
+				}
+				#icons a i {
+					line-height: 140px;
+				}
+			}
+			@media only screen and (orientation: portrait) {
+				#icons {
+					left: 0;
+					right: 0;
+					bottom: 0;
+					margin-left: auto;
+					margin-right: auto;
+					width: 150px;
+				}
+				#icons a {
+					width: 140px;
+				}
+			}
+			#icons a.active {
+				display: inline-block;
+			}
+			#icons a i {
+				font-size: 28pt;
+			}
+			#toggle-menu {
+				position: fixed;
+				left: 0;
 				top: 0;
 				font-size: 18pt;
 				cursor: pointer;
 				padding: 10px;
-				width: 24px;
-			}
-			#icons a {
-				width: 24px;
-				height: 24px;
-				float: left;
-				background: rgba(255, 255, 255, 0.1);
-				margin: 3px;
-				padding: 3px;
-			}
-			#icons a.active {
-				background: rgba(255, 255, 255, 0.25);
 			}
 			.close {
 				float: right;
@@ -74,25 +113,31 @@
 			.icons a {
 				color: white;
 			}
+			p {
+				margin: 5px 0;
+			}
 		</style>
 	</head>
 	<body>
+		<a id="toggle-menu" onClick="toggleModal()">?</a>
 		<div id="icons">
-			<a id="toggle-menu" onClick="toggleModal()">?</a>
-			<a id="draw-tool" class="active" onClick="drawTool()"><i class="material-icons">edit</i></a>
-			<a id="transform-tool" onClick="transformTool()"><i class="material-icons">open_with</i></a>
+			<a id="draw-tool" title="move mode" class="active" onClick="transformTool()"><i class="material-icons">open_with</i></a>
+			<a id="transform-tool" title="draw mode" onClick="drawTool()"><i class="material-icons">edit</i></a>
 		</div>
 		<div id="menu">
 			<div id="menu-container">
 				<i class="material-icons close" onClick="toggleModal()">close</i>
-				<!-- <h2>Thought</h2> -->
-				<p>What if drawing interfaces emphasized design principles, such as shape, composition, and color, instead of mimicking physical media?</p>
+				<p>What if drawing interfaces emphasized design principles (shape, composition, color) rather than mimicking physical media?</p>
 				<h2>Usage</h2>
+				<h3>Draw mode</h3>
 				<p>Left click drag: draw shape</p>
 				<p>Double click: close shape</p>
 				<p>Right click drag: shift hue</p>
-				<p>Vertical scroll shift value</p>
+				<p>Vertical scroll: shift value</p>
 				<p>Horizontal scroll: shift saturation</p>
+				<h3>Move mode</h3>
+				<p>Left click drag: move shape</p>
+				<p>Vertical scroll: bring shape forward/back</p>
 				<br />
 				<p class="icons">
 					<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
@@ -200,6 +245,7 @@
 				document.getElementById("transform-tool").className = "";
 				document.getElementById("toggle-menu").className = "";
 				MODE = 'draw';
+				document.body.style.cursor = 'crosshair';
 			}
 
 			function transformTool() {
@@ -207,6 +253,7 @@
 				document.getElementById("transform-tool").className = "active";
 				document.getElementById("toggle-menu").className = "";
 				MODE = 'transform';
+				document.body.style.cursor = 'move';
 			}
 
 			function initDim() {
@@ -293,6 +340,17 @@
 			function addPoint(x, y) {
 				if (!currentLine) {
 					startNewShape();
+					var vec = new THREE.Vector3(x, y, 0.5);
+					var intersects = intersectPt(canvasPt({'x': x, 'y': y}));
+					if (intersects != undefined) {
+						var hsl = new THREE.Color();
+						hsl = intersects.material.color.getHSL(hsl);
+						if (hsl.l < 0.4) {
+							currentLine.material.color.r = 1.0;
+							currentLine.material.color.g = 1.0;
+							currentLine.material.color.b = 1.0;
+						}
+					}
 				}
 				var positions = currentLine.geometry.attributes.position.array;
 
@@ -316,6 +374,11 @@
 						nSamples += 1;
 						avg.add(sample.material.color);
 					}
+				}
+				if (!nSamples) {
+					// no samples taken, probably all around edges
+					avg.copy(squareBG.material.color);
+					nSamples = 1;
 				}
 				return avg.multiplyScalar(1.0 / nSamples);
 			}
@@ -345,8 +408,16 @@
 					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ) );
 					scene.add(mesh);
 					mesh.position.z = zCount;
-					zCount++;
+					zCount += 0.99;
 					clearLine();
+
+					numVertices = 0;
+					scene.children.map(function(a) {
+						if (a.id != squareBG.id) {
+							numVertices += a.geometry.attributes.position.count;
+						}
+					});
+					console.log(numVertices);
 				}
 			}
 
@@ -528,7 +599,7 @@
 					if (intersected && intersected.id != squareBG.id) {
 						document.body.style.cursor = 'pointer';
 					} else {
-						document.body.style.cursor = 'auto';
+						document.body.style.cursor = 'move';
 					}
 					if (currentObj && startTransformPt) {
 						var vec = currentPt();
@@ -577,6 +648,7 @@
 						var delta = mouseDelta();
 						intersected.position.z = intersected.position.z + (delta.y > 0 ? -1 : 1);
 						zCount = Math.max(intersected.position.z, zCount);
+						normalizeZDepths();
 					}
 				}
 				event.preventDefault();
@@ -618,9 +690,24 @@
 				}
 			}
 
+			function normalizeZDepths() {
+				var sorted = scene.children.map(function(a) {
+					return {'id': a.id, 'z': a.position.z }
+				});
+				sorted.sort((a, b) => a.z - b.z);
+				var count = 0;
+				sorted.map(function(a) {
+					if (a.id != squareBG.id) {
+						scene.getObjectById(a.id).position.z = count;
+						count += 0.99;
+					}
+				});
+			}
+
 			function intersectPt(pt) {
 				raycaster.setFromCamera( pt, camera );
 				var intersects = raycaster.intersectObjects( [ scene ], true );
+				// console.log(intersects.map(function(a) { console.log(a.object.position.z) }));
 				if ( intersects.length > 0 ) {
 					// assuming that ids are incremented with each new object
 					intersects.sort((a, b) => b.object.position.z - a.object.position.z);
@@ -682,19 +769,23 @@
 					0.5 );
 				return vec;
 			}
+
 			function currentPt() {
 				var vec = mouseToCanvasPt();
 				vec.unproject( camera );
-				vec.x = Math.max(-CANVAS_WIDTH / 2.0, Math.min(vec.x, CANVAS_WIDTH / 2.0));
-				vec.y = Math.max(-CANVAS_HEIGHT / 2.0, Math.min(vec.y, CANVAS_HEIGHT / 2.0));
+				vec.x = Math.max(-CANVAS_WIDTH, Math.min(vec.x, CANVAS_WIDTH));
+				vec.y = Math.max(-CANVAS_HEIGHT, Math.min(vec.y, CANVAS_HEIGHT));
 				return vec;
 			}
+
 			function sqdist(v1, v2) {
 				return (v1.x - v2.x) ** 2 + (v1.x - v2.x) ** 2;
 			}
+
 			function clamp(v, a, b) {
 				return Math.min(Math.max(v, a), b);
 			}
+
 			function rightClick(event) {
 				return ("which" in event) ? event.which == 3 : event.button == 2;
 			}
