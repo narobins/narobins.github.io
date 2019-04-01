@@ -827,6 +827,9 @@
 					clearHueShift(hueOnly=(event.type == "touchmove"));
 					clearLine();
 
+					if (event.type != "touchmove") {
+						hoverObj = checkIntersection(event);
+					}
 					var delta = mouseDelta(event);
 					if (delta && hoverObj) {
 						var hsl = new THREE.Color();
