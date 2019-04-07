@@ -116,14 +116,14 @@
 				right: 15px;
 				cursor: pointer;
 			}
-			.icons {
+			.menu-icons {
 				bottom: 30px;
 				position: absolute;
 			}
-			.icons i {
+			.menu-icons i {
 				cursor: pointer;
 			}
-			.icons a {
+			.menu-icons a {
 				color: white;
 			}
 			p {
@@ -167,7 +167,7 @@
 						<h2>Stats</h2>
 						<p><span id='numShapes'>0</span> shapes, <span id='numVertices'>0</span> vertices</p>
 						<br />
-						<p class="icons">
+						<p class="menu-icons">
 							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
 							<a href="https://github.com/narobins" target="_blank"><i class="material-icons" alt="code">code</i></a>
 						</p>
@@ -256,6 +256,8 @@
 			var hueShiftColor;
 			var squareBG;
 
+			var newShapePt = false;
+
 			// transform
 			var currentTransformPt = false;
 			var transformOrigin = false;
@@ -284,13 +286,22 @@
 			init();
 			animate();
 
+			document.getElementById('download').addEventListener('touchstart', function(event) {
+				saveCanvas();
+			})
+
+			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
+				toggleModal();
+			})
+
 			function toggleModal() {
 				var menu = document.getElementById("menu");
 				if (menu.style.display !== "none") {
 					menu.style.display = "none";
-				}
-				else {
+					MODE = (document.getElementById("draw-tool").className == "active" ? 'draw' : 'transform');
+				} else {
 					menu.style.display = "block";
+					MODE = '';
 				}
 			}
 
@@ -401,7 +412,9 @@
 				return obj;
 			}
 
-			function startNewShape() {
+			function startNewShape(vec) {
+				newShapePt = debugPt(vec, 0x000000);
+				console.log(newShapePt);
 				var geometry = new THREE.BufferGeometry();
 				var positions = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
 				geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
@@ -430,8 +443,8 @@
 
 			function addPoint(x, y) {
 				if (!currentLine) {
-					startNewShape();
 					var vec = new THREE.Vector3(x, y, 0.5);
+					startNewShape(vec);
 					var intersects = intersectPt(canvasPt({'x': x, 'y': y}));
 					if (intersects != undefined) {
 						var hsl = new THREE.Color();
@@ -451,6 +464,11 @@
 
 				currentLine.geometry.setDrawRange( 0, pos_idx / 3 );
 				currentLine.geometry.attributes.position.needsUpdate = true;
+
+				if (newShapePt) {
+					scene.remove(newShapePt);
+					newShapePt = false;
+				}
 			}
 
 			function avgSampleColors(pts) {
@@ -531,6 +549,7 @@
 				pt.position.z = MAX_ZDEPTH;
 				// console.log(pt.position);
 				scene.add( pt );
+				return pt;
 			}
 
 			function visualizeLine(vec) {
@@ -602,7 +621,6 @@
 				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
 				document.getElementById("download").setAttribute("href", img);
 				document.getElementById("download").setAttribute("download", "asdf.png");
-
 			}
 
 			function onKeyPress() {
@@ -653,7 +671,7 @@
 					}
 				} else if (MODE == 'transform') {
 					var intersected = checkIntersection(event);
-					if (intersected.id != squareBG.id) {
+					if (intersected && intersected.id != squareBG.id) {
 						currentObj = setCurrent(intersected);
 						currentTransformPt = currentPt();
 
@@ -664,11 +682,11 @@
 						} else if ((event.touches && event.touches.length == 2) ||
 							(event.type == 'mousedown') && rightClick(event)) {
 							startScale = pinchDist(event) / currentObj.scale.x;
+
 							startRotate = pinchAngle(event);
 							if (event.type == 'mousedown') {
 								transformOrigin = currentObj.position;
 							}
-							// debugPt(transformOrigin, new THREE.Vector3(0,0,1));
 						}
 					}
 				}
@@ -676,7 +694,6 @@
 			}
 
 			function getObjectPos(obj) {
-				// return obj.geometry.boundingSphere.center;
 				return {
 					'x': obj.position.x,
 					'y': obj.position.y
@@ -684,15 +701,16 @@
 			}
 
 			function flipShapes(event) {
-				if (!currentObj) {
-					currentObj = checkIntersection(event);
-					if (currentObj.id != squareBG.id) {
-						var delta = mouseDelta(event);
-						outline(currentObj);
-						currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
-						zCount = Math.max(currentObj.position.z, zCount);
-						normalizeZDepths();
+				currentObj = currentObj || checkIntersection(event);
+				if (currentObj && currentObj.id != squareBG.id) {
+					var delta = mouseDelta(event);
+					if (event.type == "touchmove") {
+						delta *= -1;
 					}
+					outline(currentObj);
+					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
+					zCount = Math.max(currentObj.position.z, zCount);
+					normalizeZDepths();
 				}
 			}
 
@@ -769,8 +787,8 @@
 					} else if ((event.type == "touchmove" && event.touches.length == 2) ||
 						(event.type == 'mousemove') && rightClick(event)) {
 						if (currentObj != undefined) {
+
 							var k = (pinchDist(event) / startScale) / currentObj.scale.x;
-							k = 1;
 							var o = pinchAngle(event);
 							var c = Math.cos(o - startRotate);
 							var s = Math.sin(o - startRotate);
@@ -949,7 +967,7 @@
 				} else if (event.touches.length == 2) {
 					var res = Math.atan2(
 						(event.touches[0].clientY - event.touches[1].clientY),
-						(event.touches[0].clientX - event.touches[1].clientX)
+						(event.touches[1].clientX - event.touches[0].clientX)
 					)
 					return res
 				}
