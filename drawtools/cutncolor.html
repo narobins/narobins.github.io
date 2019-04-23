@@ -234,6 +234,7 @@
 			// tablet
 			// three finger drag, edit mode, switches current shape when you leave shape, also imprecise
 			// line for three finger drag edit mode
+			// resize keep screen aspect ratio
 
 			var container;
 			var camera, scene, renderer, composer, outlinePass, effectFXAA ;
@@ -332,14 +333,14 @@
 				var bb = document.getElementById("canvas").getBoundingClientRect();
 
 				var aspect = bb.width / bb.height;
-				var frustumSize = bb.height;
+				var frustum = bb.height;
 
 				// camera
 				camera = new THREE.OrthographicCamera(
-					frustumSize * aspect / - 2,
-					frustumSize * aspect / 2,
-					frustumSize / 2,
-					frustumSize / - 2,
+					frustum * aspect / - 2,
+					frustum * aspect / 2,
+					frustum / 2,
+					frustum / - 2,
 					1,
 					2 * MAX_ZDEPTH + 1 );
 				camera.rotation.x = 0;
@@ -405,10 +406,6 @@
 			function checkIntersection(event) {
 				var mouse = mouseToCanvasPt();
 				var obj = intersectPt(mouse);
-				// if (obj.id != squareBG.id) {
-					// console.log(obj);
-					// outlinePass.selectedObjects = [obj];
-				// }
 				return obj;
 			}
 
@@ -503,7 +500,6 @@
 				var center = new THREE.Vector3();
 				center.copy(currentLine.geometry.boundingSphere.center);
 
-				console.log(currentLine);
 				if (currentLine) {
 					var positions = currentLine.geometry.attributes.position.array;
 					positions[ pos_idx ++ ] = positions[0];
@@ -514,6 +510,7 @@
 					var pts = [];
 					for (var i = 0; i < pos_idx; i+=3) {
 						pts.push(new THREE.Vector2( positions[i] - center.x, positions[i+1] - center.y ));
+						debugPt(new THREE.Vector3(pts.slice(-1)[0].x, pts.slice(-1)[0].y));
 					}
 
 					var avg = avgSampleColors(pts);
@@ -521,7 +518,8 @@
 
 					var shape = new THREE.Shape(pts);
 					var geometry = new THREE.ShapeBufferGeometry( shape );
-					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ) );
+					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg, wireframe: true, side: THREE.DoubleSide } ));
+					console.log(mesh.material.side);
 					scene.add(mesh);
 					mesh.position.x = center.x;
 					mesh.position.y = center.y;
@@ -547,7 +545,6 @@
 				pt.position.x = vec.x;
 				pt.position.y = vec.y;
 				pt.position.z = MAX_ZDEPTH;
-				// console.log(pt.position);
 				scene.add( pt );
 				return pt;
 			}
@@ -560,6 +557,12 @@
 				lineVisualizer = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: 0x000000 } ) );
 				lineVisualizer.position.z = zCount;
 				scene.add( lineVisualizer );
+			}
+
+			function adjustLineVisualizer(vec) {
+				lineVisualizer.geometry.vertices[1].x = vec.x;
+				lineVisualizer.geometry.vertices[1].y = vec.y;
+				lineVisualizer.geometry.verticesNeedUpdate = true;
 			}
 
 			function visualizeHue(vec) {
@@ -602,14 +605,9 @@
 					'x': transformOrigin.x + delta.x,
 					'y': transformOrigin.y + delta.y,
 				};
-				// shape.geometry.translate(p.x - center.x, p.y - center.y, 0);
-				// console.log(p);
-				// console.log(center);
 				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
-				// shape.geometry.computeBoundingSphere();
-				// console.log(center);
-				// console.log(shape.position);
 			}
+
 			// Events
 			///////////////////////////////////////////////////////////////////
 			// disable right click menu
@@ -669,6 +667,7 @@
 						}
 						event.preventDefault();
 					}
+
 				} else if (MODE == 'transform') {
 					var intersected = checkIntersection(event);
 					if (intersected && intersected.id != squareBG.id) {
@@ -682,8 +681,9 @@
 						} else if ((event.touches && event.touches.length == 2) ||
 							(event.type == 'mousedown') && rightClick(event)) {
 							startScale = pinchDist(event) / currentObj.scale.x;
-
 							startRotate = pinchAngle(event);
+							visualizeLine(pinchCenter(event));
+
 							if (event.type == 'mousedown') {
 								transformOrigin = currentObj.position;
 							}
@@ -714,61 +714,93 @@
 				}
 			}
 
+			function shiftHue(event) {
+				if (!hoverObj || !lineVisualizer) {
+					startHueShift();
+				}
+
+				clearLine();
+				prevPt = false;
+				var vec = currentPt();
+				// vec.z = 0;
+				adjustLineVisualizer(vec);
+
+				var diff = new THREE.Vector2(
+					lineVisualizer.geometry.vertices[1].x - lineVisualizer.geometry.vertices[0].x,
+					lineVisualizer.geometry.vertices[1].y - lineVisualizer.geometry.vertices[0].y,
+				);
+				var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
+				var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
+
+				hoverObj.material.color.set(hueShiftColor);
+
+				// adjust hue in a copy of the color
+				var offsetColor = new THREE.Color();
+				hoverObj.material.color.getHSL(offsetColor);
+				offsetColor.setHSL(degrees, 1.0, offsetColor.l);
+
+				// mix offset color back into original color
+				offsetColor.multiplyScalar(amount);
+				hoverObj.material.color.multiplyScalar(1.0 - amount);
+				hoverObj.material.color.add(offsetColor);
+				event.preventDefault();
+			}
+
+			function shiftValue(event) {
+				prevPt = false;
+
+				if (!hoverObj) {
+					hoverObj = checkIntersection(event);
+				}
+				if (!lineVisualizer) {
+					visualizeLine(currentPt());
+				}
+
+				onDocumentMouseWheel(event);
+
+				var vec = currentPt();
+				lineVisualizer.geometry.vertices[1].x = vec.x;
+				lineVisualizer.geometry.vertices[1].y = vec.y;
+				lineVisualizer.geometry.verticesNeedUpdate = true;
+			}
+
+			function scaleRotateTransform(event) {
+				if (currentObj != undefined) {
+
+					var k = (pinchDist(event) / startScale) / currentObj.scale.x;
+					if (!lineVisualizer) {
+						visualizeLine(currentPt());
+					}
+					adjustLineVisualizer(currentPt());
+
+					var o = pinchAngle(event);
+					var c = Math.cos(o - startRotate);
+					var s = Math.sin(o - startRotate);
+					var p = transformOrigin;
+
+					var m = new THREE.Matrix4();
+					m.set(
+						k*c, -s*k, 0, k*(-c*p.x + s*p.y) + p.x,
+						k*s, k*c, 0, k*(-s*p.x - c*p.y) + p.y,
+						0, 0, 1, 0,
+						0, 0, 0, 1);
+					currentObj.applyMatrix(m);
+					startRotate = o;
+				}
+			}
+
 			function onDocumentMouseMove(event) {
 				if (MODE == 'draw') {
 					debugEvent(event);
 
 					if (event.type == "touchmove" && event.touches.length == 3) {
-						prevPt = false;
 
-						if (!hoverObj) {
-							hoverObj = checkIntersection(event);
-						}
-						if (!lineVisualizer) {
-							visualizeLine(currentPt());
-						}
-
-						onDocumentMouseWheel(event);
-
-						var vec = currentPt();
-						lineVisualizer.geometry.vertices[1].x = vec.x;
-						lineVisualizer.geometry.vertices[1].y = vec.y;
-						lineVisualizer.geometry.verticesNeedUpdate = true;
+						shiftValue(event);
 
 					} else if ((rightClick(event) ||
 							(event.type == "touchmove" && event.touches.length == 2))) {
 
-						if (!hoverObj || !lineVisualizer) {
-							startHueShift();
-						}
-
-						clearLine();
-						prevPt = false;
-						var vec = currentPt();
-						// vec.z = 0;
-						lineVisualizer.geometry.vertices[1].x = vec.x;
-						lineVisualizer.geometry.vertices[1].y = vec.y;
-						lineVisualizer.geometry.verticesNeedUpdate = true;
-
-						var diff = new THREE.Vector2(
-							lineVisualizer.geometry.vertices[1].x - lineVisualizer.geometry.vertices[0].x,
-							lineVisualizer.geometry.vertices[1].y - lineVisualizer.geometry.vertices[0].y,
-						);
-						var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
-						var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
-
-						hoverObj.material.color.set(hueShiftColor);
-
-						// adjust hue in a copy of the color
-						var offsetColor = new THREE.Color();
-						hoverObj.material.color.getHSL(offsetColor);
-						offsetColor.setHSL(degrees, 1.0, offsetColor.l);
-
-						// mix offset color back into original color
-						offsetColor.multiplyScalar(amount);
-						hoverObj.material.color.multiplyScalar(1.0 - amount);
-						hoverObj.material.color.add(offsetColor);
-						event.preventDefault();
+						shiftHue(event);
 
 						// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
 					} else if ((event.type == "mousemove" || event.touches.length == 1)) {
@@ -781,28 +813,14 @@
 						}
 					}
 				} else if (MODE == 'transform') {
+					console.log('k');
 					if (event.type == "touchmove" && event.touches.length == 3) {
 						flipShapes(event);
 
 					} else if ((event.type == "touchmove" && event.touches.length == 2) ||
 						(event.type == 'mousemove') && rightClick(event)) {
-						if (currentObj != undefined) {
 
-							var k = (pinchDist(event) / startScale) / currentObj.scale.x;
-							var o = pinchAngle(event);
-							var c = Math.cos(o - startRotate);
-							var s = Math.sin(o - startRotate);
-							var p = transformOrigin;
-
-							var m = new THREE.Matrix4();
-							m.set(
-								k*c, -s*k, 0, k*(-c*p.x + s*p.y) + p.x,
-								k*s, k*c, 0, k*(-s*p.x - c*p.y) + p.y,
-								0, 0, 1, 0,
-								0, 0, 0, 1);
-							currentObj.applyMatrix(m);
-							startRotate = o;
-						}
+						scaleRotateTransform(event);
 
 					} else {
 						if (currentObj && currentTransformPt) {
@@ -938,11 +956,24 @@
 				return vec;
 			}
 
+			function pinchCenter(event) {
+				if (event.touches == undefined) {
+					return {x: currentObj.position.x, y: currentObj.position.y};
+				} else {
+					return {
+						x: (event.touches[0].clientY - event.touches[1].clientY) / 2,
+						y: (event.touches[1].clientX - event.touches[0].clientX) / 2
+					}
+				}
+			}
+
 			function pinchDist(event) {
 				var p1, p2;
 				if (event.touches == undefined) {
-					p1 = {x: event.clientX, y: event.clientY};
-					p2 = {x: currentObj.geometry.boundingSphere.center.x, y: currentObj.geometry.boundingSphere.center.y};
+					p1 = currentPt();
+					p2 = {x: currentObj.position.x, y: currentObj.position.y};
+					console.log(p1);
+					console.log(p2);
 					return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
 				} else if (event.touches.length == 2) {
 					return Math.sqrt(
@@ -997,13 +1028,6 @@
 				}
 			}
 
-			// function getTouchCenter(touches) {
-			// 	return new THREE.Vector3(
-			// 		touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length,
-			// 		touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length,
-			// 		0.5);
-			// }
-
 			function mouseToCanvasPt() {
 				var vec = new THREE.Vector3();
 
@@ -1014,7 +1038,6 @@
 						touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length,
 						touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length,
 						0.5);
-					// vec.set(event.touches[0].clientX, event.touches[0].clientY, 0.5);
 				} else {
 					vec.set(event.clientX, event.clientY, 0.5);
 				}
@@ -1034,17 +1057,11 @@
 				return vec;
 			}
 
-			function sqdist(v1, v2) {
-				return (v1.x - v2.x) ** 2 + (v1.x - v2.x) ** 2;
-			}
+			function sqdist(v1, v2) { return (v1.x - v2.x) ** 2 + (v1.x - v2.x) ** 2; }
 
-			function clamp(v, a, b) {
-				return Math.min(Math.max(v, a), b);
-			}
+			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 
-			function rightClick(event) {
-				return ("which" in event) ? event.which == 3 : event.button == 2;
-			}
+			function rightClick(event) { return ("which" in event) ? event.which == 3 : event.button == 2; }
 		</script>
 
 	</body>
