@@ -251,7 +251,7 @@
 			var MODE = 'draw';
 
 			// draw
-			var pos_idx = 0;
+			var p_idx = 0;
 			var currentLine = false;
 			var prevPt = false;
 			var hueShiftColor;
@@ -270,8 +270,8 @@
 			var latestDrag = false;
 			var hoverObj = false;
 
-			var lineVisualizer = false;
-			var hueVisualizer = false;
+			var lineViz = false;
+			var hueViz = false;
 
 			var zCount = 1;
 			var MAX_ZDEPTH = 1000;
@@ -410,8 +410,8 @@
 			}
 
 			function startNewShape(vec) {
-				newShapePt = debugPt(vec, 0x000000);
-				console.log(newShapePt);
+				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
+
 				var geometry = new THREE.BufferGeometry();
 				var positions = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
 				geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
@@ -442,10 +442,10 @@
 				if (!currentLine) {
 					var vec = new THREE.Vector3(x, y, 0.5);
 					startNewShape(vec);
-					var intersects = intersectPt(canvasPt({'x': x, 'y': y}));
-					if (intersects != undefined) {
+					var intersection = intersectPt(canvasPt({'x': x, 'y': y}));
+					if (intersection != undefined) {
 						var hsl = new THREE.Color();
-						hsl = intersects.material.color.getHSL(hsl);
+						hsl = intersection.material.color.getHSL(hsl);
 						if (hsl.l < 0.4) {
 							currentLine.material.color.r = 1.0;
 							currentLine.material.color.g = 1.0;
@@ -455,17 +455,12 @@
 				}
 				var positions = currentLine.geometry.attributes.position.array;
 
-				positions[ pos_idx ++ ] = x;
-				positions[ pos_idx ++ ] = y;
-				positions[ pos_idx ++ ] = 0;
+				positions[ p_idx ++ ] = x;
+				positions[ p_idx ++ ] = y;
+				positions[ p_idx ++ ] = 0;
 
-				currentLine.geometry.setDrawRange( 0, pos_idx / 3 );
+				currentLine.geometry.setDrawRange( 0, p_idx / 3 );
 				currentLine.geometry.attributes.position.needsUpdate = true;
-
-				if (newShapePt) {
-					scene.remove(newShapePt);
-					newShapePt = false;
-				}
 			}
 
 			function avgSampleColors(pts) {
@@ -495,31 +490,171 @@
 			}
 
 			function closeShape() {
-				console.log('close');
-				currentLine.geometry.computeBoundingSphere();
-				var center = new THREE.Vector3();
-				center.copy(currentLine.geometry.boundingSphere.center);
-
 				if (currentLine) {
-					var positions = currentLine.geometry.attributes.position.array;
-					positions[ pos_idx ++ ] = positions[0];
-					positions[ pos_idx ++ ] = positions[1];
-					positions[ pos_idx ++ ] = positions[2];
+					currentLine.geometry.computeBoundingSphere();
+					var center = new THREE.Vector3();
+					center.copy(currentLine.geometry.boundingSphere.center);
 
-					// make closed shape from line pts
-					var pts = [];
-					for (var i = 0; i < pos_idx; i+=3) {
-						pts.push(new THREE.Vector2( positions[i] - center.x, positions[i+1] - center.y ));
-						debugPt(new THREE.Vector3(pts.slice(-1)[0].x, pts.slice(-1)[0].y));
+					var p = currentLine.geometry.attributes.position.array;
+					var n_pts = p_idx;
+					p[ p_idx ++ ] = p[0];
+					p[ p_idx ++ ] = p[1];
+					p[ p_idx ++ ] = p[2];
+
+					function getPt(i) {
+						return new THREE.Vector3(p[i], p[i+1]);
 					}
 
-					var avg = avgSampleColors(pts);
+					function countIntersections(start, vec, i) {
+						var s = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT);
+						var end = new THREE.Vector3(start.x + s * vec.x, start.y + s * vec.y);
+						var j = 0;
+						var count = 0;
+						while (j < n_pts) {
+							var intersect;
+							if (ptsIntersect(start, end, getPt(j), getPt(j+3))) {
+								count += 1;
+							}
+							j += 3;
+						}
+						return count % 2 == 1;
+					}
+
+					function chooseDirection(start, intersect, a, b, i) {
+						var original = new THREE.Vector2(start.x - intersect.x, start.y - intersect.y).normalize();
+						var a_pt = getPt(a);
+						var b_pt = getPt(b);
+						var a_v = new THREE.Vector2(a_pt.x - intersect.x, a_pt.y - intersect.y).normalize();
+						var b_v = new THREE.Vector2(p[b] - intersect.x, p[b + 1] - intersect.y).normalize();
+						var a_avg = new THREE.Vector2((original.x + a_v.x) / 2, (original.y + a_v.y) / 2).normalize();
+						var b_avg = new THREE.Vector2((original.x + b_v.x) / 2, (original.y + b_v.y) / 2).normalize();
+
+						if (countIntersections(intersect, a_avg, i)) {
+							return true;
+						} else if (countIntersections(intersect, b_avg, i)) {
+							return false;
+						} else {
+							debugPt(intersect, 0xff0000);
+							throw new Error('both cant be clockwise');
+						}
+					}
+
+					function getIntersection(start, end, i) {
+						var j = 0;
+						var res = undefined;
+						var a;
+						var b;
+						while (j < p_idx - 3) {
+							var intersect;
+							if (!(i == j || i == j + 3)) {
+							// if (i_intersection || !(i == j || i == j + 3)) {
+								intersect = ptsIntersect(start, end, getPt(j), getPt(j+3));
+								if (intersect) {
+									if (res == undefined || sqdist(start, res) > sqdist(start, intersect)) {
+										res = intersect;
+										a = j;
+										b = j + 3;
+									}
+								}
+							}
+							j += 3;
+						}
+						return {
+							'cross': res,
+							'a': a,
+							'b': b
+						};
+					}
+
+					var i = 0;
+					var queue = [[i, new THREE.Vector2(p[i], p[i+1]), 1, false]];
+					var shapes = [];
+					var limit = 0;
+
+					function trace(i, p_this, dir, i_intersection) {
+						// debugPt(p_this, 0x00ff00);
+						var pts = [];
+						var visited = [];
+
+						var i_next = i_intersection ? i : i + dir * 3;
+						var p_next = new THREE.Vector2(p[i_next], p[i_next + 1]);
+
+						function addPt(p) {
+							pts.push(new THREE.Vector2( p.x - center.x, p.y - center.y ));
+						}
+
+						while ((i < n_pts || i_intersection) && limit < 1000) {
+							limit += 1;
+							addPt(p_this);
+
+							i_next = i_intersection ? i : i + 3 * dir;
+							p_next = getPt(i_next);
+
+							if (!i_intersection) {
+								if (visited.includes((i % n_pts) / 3)) {
+									return pts;
+								}
+								visited.push((i % n_pts) / 3);
+							}
+
+							var r = getIntersection(p_this, p_next, i);
+							var cross = r.cross;
+							var a = r.a;
+							var b = r.b;
+
+							if (cross != undefined) {
+								choice = chooseDirection(p_this, cross, a, b, i);
+								i = choice ? a : b;
+								i_other = choice ? b : a;
+								i_intersection = true;
+								// dir is positive if we chose the higher index
+								dir = (i == Math.max(a, b) || (Math.min(a, b) == 0)) ? 1 : -1;
+
+								var later = [i_other, getPt(i_other), -dir, true];
+								queue.push(later);
+								p_this = cross;
+
+							} else {
+								p_this = p_next;
+								i = i_next;
+								i_intersection = false;
+							}
+						}
+						return pts;
+					}
+
+					var queueOld = [];
+
+					function beenVisited(v, q) {
+						for (var idx; idx < q.length; idx++) {
+							if (v[0] === q[idx][0] &&
+								v[1].x === q[idx][1].x &&
+								v[1].y === q[idx][1].y &&
+								v[2] === q[idx][2] &&
+								v[3] === q[idx][3]) {
+								return true;
+							}
+						}
+						return false;
+					}
+
+					var visiting = queue.pop();
+					while (visiting != undefined) {
+						if (!beenVisited(visiting, queueOld) && !beenVisited(visiting, queue)) {
+							var path = trace(visiting[0], visiting[1], visiting[2], visiting[3]);
+							if (path.length > 0) {
+								shapes.push(new THREE.Shape(path));
+							}
+							queueOld.push(visiting);
+						}
+						visiting = queue.pop();
+					}
+
+					var avg = avgSampleColors(shapes[0]);
 					avg.offsetHSL(offsetRandom(0.03, 0.01), offsetRandom(0.05, 0.03), offsetRandom(0.03, 0.06));
 
-					var shape = new THREE.Shape(pts);
-					var geometry = new THREE.ShapeBufferGeometry( shape );
-					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg, wireframe: true, side: THREE.DoubleSide } ));
-					console.log(mesh.material.side);
+					var geometry = new THREE.ShapeBufferGeometry( shapes );
+					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ));
 					scene.add(mesh);
 					mesh.position.x = center.x;
 					mesh.position.y = center.y;
@@ -536,10 +671,16 @@
 					document.getElementById('numVertices').textContent = String(numVertices)
 					document.getElementById('numShapes').textContent = String(scene.children.length - 1)
 				}
+
+				if (newShapePt) {
+					scene.remove(newShapePt);
+					newShapePt = false;
+				}
 			}
 
 			function debugPt(vec, c) {
-				var geometry = new THREE.CircleGeometry( 8, 4 );
+				c = c || 0xffffff;
+				var geometry = new THREE.CircleGeometry( 4, 4 );
 				var material = new THREE.MeshBasicMaterial({color:c});
 				var pt = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({color:c}) );
 				pt.position.x = vec.x;
@@ -549,24 +690,56 @@
 				return pt;
 			}
 
-			function visualizeLine(vec) {
+			function showLineModal(vec, c) {
 				var lineGeo = new THREE.Geometry();
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 
-				lineVisualizer = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: 0x000000 } ) );
-				lineVisualizer.position.z = zCount;
-				scene.add( lineVisualizer );
+				lineViz = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: c } ) );
+				lineViz.position.z = zCount;
+				scene.add( lineViz );
 			}
 
-			function adjustLineVisualizer(vec) {
-				lineVisualizer.geometry.vertices[1].x = vec.x;
-				lineVisualizer.geometry.vertices[1].y = vec.y;
-				lineVisualizer.geometry.verticesNeedUpdate = true;
+			function debugLine(pt1, pt2, c) {
+				var pta = new THREE.Vector3();
+				var ptb = new THREE.Vector3();
+				pta.copy(pt1);
+				ptb.copy(pt2);
+				var jitter = 0;
+				pta.x += Math.random() * jitter;
+				pta.y += Math.random() * jitter;
+				pta.z = 0;
+				ptb.x -= Math.random() * jitter;
+				ptb.y -= Math.random() * jitter;
+				ptb.z = 0;
+
+				var geo = new THREE.Geometry();
+				geo.vertices.push(pta);
+				geo.vertices.push(ptb);
+
+				var line = new THREE.Line( geo, new THREE.LineBasicMaterial( { color: c } ) );
+				line.position.z = zCount;
+				scene.add( line );
 			}
 
-			function visualizeHue(vec) {
-				visualizeLine(vec);
+			function debugVec(pt, v) {
+				var pt2 = new THREE.Vector3(pt.x + 30 * v.x, pt.y + 30 * v.y);
+				return debugLine(pt, pt2, 0x00ffff);
+			}
+
+			function setLineModal(vec) {
+				lineViz.geometry.vertices[1].x = vec.x;
+				lineViz.geometry.vertices[1].y = vec.y;
+				lineViz.geometry.verticesNeedUpdate = true;
+			}
+
+			function showHueWheel(vec, c) {
+				var hsl = new THREE.Color();
+				hsl = c.getHSL(hsl);
+				console.log(hsl);
+				var lineColor = hsl.l < 0.4 ? 0xffffff : 0x000000;
+				console.log(lineColor);
+				showLineModal(vec, lineColor);
 
 				var circleGeo = new THREE.CircleGeometry( 20, 24 );
 				var circleMat = new THREE.ShaderMaterial({
@@ -575,10 +748,10 @@
 					depthWrite: false,
 					depthTest: false
 				});
-				hueVisualizer = new THREE.Mesh( circleGeo, circleMat );
-				hueVisualizer.position.x = vec.x;
-				hueVisualizer.position.y = vec.y;
-				scene.add( hueVisualizer );
+				hueViz = new THREE.Mesh( circleGeo, circleMat );
+				hueViz.position.x = vec.x;
+				hueViz.position.y = vec.y;
+				scene.add( hueViz );
 			}
 
 			function animate() {
@@ -631,7 +804,7 @@
 					hoverObj = checkIntersection(event);
 					if (hoverObj && hoverObj.material.color) {
 						hueShiftColor = hoverObj.material.color.clone();
-						visualizeHue(currentPt());
+						showHueWheel(currentPt(), hueShiftColor);
 						event.preventDefault();
 						event.stopPropagation();
 					}
@@ -672,20 +845,22 @@
 					var intersected = checkIntersection(event);
 					if (intersected && intersected.id != squareBG.id) {
 						currentObj = setCurrent(intersected);
-						currentTransformPt = currentPt();
+						if (currentObj) {
+							currentTransformPt = currentPt();
 
-						if ((event.type == 'mousedown' && !rightClick(event)) ||
-							(event.touches && event.touches.length == 1)) {
-							transformOrigin = getObjectPos(currentObj);
+							if ((event.type == 'mousedown' && !rightClick(event)) ||
+								(event.touches && event.touches.length == 1)) {
+								transformOrigin = getObjectPos(currentObj);
 
-						} else if ((event.touches && event.touches.length == 2) ||
-							(event.type == 'mousedown') && rightClick(event)) {
-							startScale = pinchDist(event) / currentObj.scale.x;
-							startRotate = pinchAngle(event);
-							visualizeLine(pinchCenter(event));
+							} else if ((event.touches && event.touches.length == 2) ||
+								(event.type == 'mousedown') && rightClick(event)) {
+								startScale = pinchDist(event) / currentObj.scale.x;
+								startRotate = pinchAngle(event);
+								showLineModal(pinchCenter(event));
 
-							if (event.type == 'mousedown') {
-								transformOrigin = currentObj.position;
+								if (event.type == 'mousedown') {
+									transformOrigin = currentObj.position;
+								}
 							}
 						}
 					}
@@ -715,7 +890,7 @@
 			}
 
 			function shiftHue(event) {
-				if (!hoverObj || !lineVisualizer) {
+				if (!hoverObj || !lineViz) {
 					startHueShift();
 				}
 
@@ -723,11 +898,11 @@
 				prevPt = false;
 				var vec = currentPt();
 				// vec.z = 0;
-				adjustLineVisualizer(vec);
+				setLineModal(vec);
 
 				var diff = new THREE.Vector2(
-					lineVisualizer.geometry.vertices[1].x - lineVisualizer.geometry.vertices[0].x,
-					lineVisualizer.geometry.vertices[1].y - lineVisualizer.geometry.vertices[0].y,
+					lineViz.geometry.vertices[1].x - lineViz.geometry.vertices[0].x,
+					lineViz.geometry.vertices[1].y - lineViz.geometry.vertices[0].y,
 				);
 				var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
 				var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
@@ -752,26 +927,26 @@
 				if (!hoverObj) {
 					hoverObj = checkIntersection(event);
 				}
-				if (!lineVisualizer) {
-					visualizeLine(currentPt());
+				if (!lineViz) {
+					showLineModal(currentPt());
 				}
 
 				onDocumentMouseWheel(event);
 
 				var vec = currentPt();
-				lineVisualizer.geometry.vertices[1].x = vec.x;
-				lineVisualizer.geometry.vertices[1].y = vec.y;
-				lineVisualizer.geometry.verticesNeedUpdate = true;
+				lineViz.geometry.vertices[1].x = vec.x;
+				lineViz.geometry.vertices[1].y = vec.y;
+				lineViz.geometry.verticesNeedUpdate = true;
 			}
 
 			function scaleRotateTransform(event) {
 				if (currentObj != undefined) {
 
 					var k = (pinchDist(event) / startScale) / currentObj.scale.x;
-					if (!lineVisualizer) {
-						visualizeLine(currentPt());
+					if (!lineViz) {
+						showLineModal(currentPt());
 					}
-					adjustLineVisualizer(currentPt());
+					setLineModal(currentPt());
 
 					var o = pinchAngle(event);
 					var c = Math.cos(o - startRotate);
@@ -813,23 +988,22 @@
 						}
 					}
 				} else if (MODE == 'transform') {
-					console.log('k');
-					if (event.type == "touchmove" && event.touches.length == 3) {
-						flipShapes(event);
+					if (currentObj && currentTransformPt) {
+						if (event.type == "touchmove" && event.touches.length == 3) {
+							flipShapes(event);
 
-					} else if ((event.type == "touchmove" && event.touches.length == 2) ||
-						(event.type == 'mousemove') && rightClick(event)) {
+						} else if ((event.type == "touchmove" && event.touches.length == 2) ||
+							(event.type == 'mousemove') && rightClick(event)) {
 
-						scaleRotateTransform(event);
+							scaleRotateTransform(event);
 
-					} else {
-						if (currentObj && currentTransformPt) {
+						} else {
 							var vec = currentPt();
 							vec.sub(currentTransformPt)
 							moveShape(currentObj, vec);
-						} else {
-							setCurrent(false);
 						}
+					} else {
+						setCurrent(false);
 					}
 					event.preventDefault();
 				}
@@ -902,12 +1076,12 @@
 			///////////////////////////////////////////////////////////////////
 
 			function clearHueShift(hueOnly=false) {
-				if (lineVisualizer) {
-					scene.remove(hueVisualizer);
-					hueVisualizer = false;
+				if (lineViz) {
+					scene.remove(hueViz);
+					hueViz = false;
 					if (!hueOnly) {
-						scene.remove(lineVisualizer);
-						lineVisualizer = false;
+						scene.remove(lineViz);
+						lineViz = false;
 					}
 					return true;
 				}
@@ -917,7 +1091,7 @@
 				if (currentLine) {
 					scene.remove(currentLine);
 					currentLine = false;
-					pos_idx = 0;
+					p_idx = 0;
 					return true;
 				}
 			}
@@ -972,8 +1146,6 @@
 				if (event.touches == undefined) {
 					p1 = currentPt();
 					p2 = {x: currentObj.position.x, y: currentObj.position.y};
-					console.log(p1);
-					console.log(p2);
 					return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
 				} else if (event.touches.length == 2) {
 					return Math.sqrt(
@@ -1061,7 +1233,40 @@
 
 			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 
+			function clockwise(v1, v2) {
+				return !(v1.y * v2.x > v1.x * v2.y);
+			}
+
+
 			function rightClick(event) { return ("which" in event) ? event.which == 3 : event.button == 2; }
+
+			// returns true iff the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
+			//https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
+			function intersects(a,b,c,d,p,q,r,s) {
+				// debugPt(new THREE.Vector2(c, d), 0xbd1efc);
+				// console.log(a, b, c, d);
+				var det, gamma, lambda;
+				det = (c - a) * (s - q) - (r - p) * (d - b);
+				if (det === 0) {
+					return false;
+				} else {
+					lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+					gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+					if ((0.0001 < lambda && lambda < 0.9999) && (0.0001 < gamma && gamma < 0.9999)) {
+						// console.log('lambd', lambda, 'gamm', gamma);
+						// console.log(a + lambda * (c-a), q + gamma * (s-q));
+						return new THREE.Vector3(
+							a + lambda * (c-a),
+							b + lambda * (d-b),
+						);
+					} else {
+						return undefined;
+					}
+				}
+			}
+			function ptsIntersect(p, q, r, s) {
+				return intersects(p.x, p.y, q.x, q.y, r.x, r.y, s.x, s.y);
+			}
 		</script>
 
 	</body>
