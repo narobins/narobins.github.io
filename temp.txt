@@ -1,0 +1,783 @@
+diff --git a/drawtools/cutncolor.html b/drawtools/cutncolor.html
+index 4c981a3..22d63aa 100644
+--- a/drawtools/cutncolor.html
++++ b/drawtools/cutncolor.html
+@@ -102,7 +102,7 @@
+ 			#icons a i {
+ 				font-size: 40pt;
+ 			}
+-			#toggle-menu {
++			#icon-menu {
+ 				position: fixed;
+ 				left: 0;
+ 				top: 0;
+@@ -110,6 +110,16 @@
+ 				cursor: pointer;
+ 				padding: 10px;
+ 			}
++			#icon-menu i {
++				width: 30px;
++				line-height: 30px;
++				height: 30px;
++				display: inline-block;
++				opacity: 0.3;
++			}
++			#icon-menu i.active {
++				opacity: 1.0;
++			}
+ 			.close {
+ 				position: absolute;
+ 				top: 15px;
+@@ -139,11 +149,13 @@
+ 		</style>
+ 	</head>
+ 	<body>
+-		<a id="toggle-menu" onClick="toggleModal()">?</a>
+-		<div id="icons">
+-			<a id="draw-tool" title="move mode" class="active" onClick="transformTool()"><i class="material-icons">open_with</i></a>
+-			<a id="transform-tool" title="draw mode" onClick="drawTool()"><i class="material-icons">edit</i></a>
++		<div id='icon-menu'>
++			<a id="toggle-menu" onClick="toggleModal()"><i class="material-icons">help</i></a>
++			<a title="shape"><i class="tool-icon material-icons draw-tool active" data-mode="draw">category</i></a>
++			<a title="color"><i class="tool-icon material-icons color-tool" data-mode="color">palette</i></a>
++			<a title="transform"><i class="tool-icon material-icons transform-tool" data-mode="transform">open_with</i></a>
+ 		</div>
++
+ 		<div id="container">
+ 			<div id="container2">
+ 				<canvas id="canvas">Your browser does not support Canvas.</canvas>
+@@ -152,12 +164,16 @@
+ 					<div id="menu-container">
+ 						<i class="material-icons close" onClick="toggleModal()">close</i>
+ 						<h2>About</h2>
+-						<p>What if drawing interfaces streamlined design decisions (shape, composition, color) rather than mimicking physical media?</p>
++						<p>What if drawing interfaces emphasized design decisions (shape, composition, color) rather than mimicking physical media?</p>
++
+ 						<h2>Usage</h2>
+-						<h3>Draw mode</h3>
+-						<p><span class='fixed'>Left click drag</span>: draw shape</p>
++						<h3>Shape mode</h3>
++						<p><span class='fixed'>Click and drag</span>: draw shape</p>
+ 						<p><span class='fixed'>Double click</span>: close shape</p>
+-						<p><span class='fixed'>Right click drag</span>: shift hue</p>
++
++						<h3>Color mode</h3>
++						<p><span class='fixed'>Click</span>: select shape</p>
++						<p><span class='fixed'>Click and drag</span>: shift hue</p>
+ 						<p><span class='fixed'>Vertical scroll</span>: shift value</p>
+ 
+ 						<h3>Move mode</h3>
+@@ -178,8 +194,6 @@
+ 
+ 		<script src="https://threejs.org/build/three.js"></script>
+ 
+-		<!-- <script src="three.min.js"></script> -->
+-		<!-- <script src="https://threejs.org/build/three.js"></script> -->
+ 		<script src="https://threejs.org/examples/js/WebGL.js"></script>
+ 
+ 		<script src="https://threejs.org/examples/js/shaders/CopyShader.js"></script>
+@@ -294,6 +308,11 @@
+ 			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
+ 				toggleModal();
+ 			})
++			var toolIcons = document.getElementsByClassName('tool-icon');
++			console.log(toolIcons);
++			for (var i = 0; i < toolIcons.length; i++) {
++				toolIcons[i].addEventListener('mousedown', switchTool)
++			}
+ 
+ 			function toggleModal() {
+ 				var menu = document.getElementById("menu");
+@@ -306,20 +325,16 @@
+ 				}
+ 			}
+ 
+-			function drawTool() {
+-				document.getElementById("draw-tool").className = "active";
+-				document.getElementById("transform-tool").className = "";
+-				document.getElementById("toggle-menu").className = "";
+-				MODE = 'draw';
+-				document.body.style.cursor = 'crosshair';
+-			}
+-
+-			function transformTool() {
+-				document.getElementById("draw-tool").className = "";
+-				document.getElementById("transform-tool").className = "active";
+-				document.getElementById("toggle-menu").className = "";
+-				MODE = 'transform';
+-				document.body.style.cursor = 'move';
++			function switchTool(e) {
++				e.target.className = "material-icons tool-icon active";
++				MODE = e.target.getAttribute('data-mode');
++				for (var i = 0; i < toolIcons.length; i++) {
++					if (toolIcons[i].getAttribute('data-mode') != MODE) {
++						toolIcons[i].className = "material-icons tool-icon";
++					}
++				}
++				clearCanvas();
++				clearDraw();
+ 			}
+ 
+ 			function initDim() {
+@@ -329,7 +344,6 @@
+ 			}
+ 
+ 			function init() {
+-				container = document.getElementById( "container" );
+ 				var bb = document.getElementById("canvas").getBoundingClientRect();
+ 
+ 				var aspect = bb.width / bb.height;
+@@ -343,11 +357,6 @@
+ 					frustum / - 2,
+ 					1,
+ 					2 * MAX_ZDEPTH + 1 );
+-				camera.rotation.x = 0;
+-				camera.rotation.y = 0;
+-				camera.rotation.z = 0;
+-				camera.position.x = 0;
+-				camera.position.y = 0;
+ 				camera.position.z = MAX_ZDEPTH + 1;
+ 
+ 				scene = new THREE.Scene();
+@@ -372,7 +381,6 @@
+ 				composer.setSize( bb.width, bb.height );
+ 				var renderPass = new THREE.RenderPass( scene, camera );
+ 				composer.addPass( renderPass );
+-				// renderPass.renderToScreen = true;
+ 
+ 				outlinePass = new THREE.OutlinePass( new THREE.Vector2( bb.width, bb.height ), scene, camera );
+ 				outlinePass.edgeStrength = 0.5;
+@@ -389,17 +397,13 @@
+ 
+ 				container.addEventListener( "mousedown", onDocumentMouseDown, false );
+ 				container.addEventListener( "touchstart", onDocumentMouseDown, false );
+-
+ 				container.addEventListener( "mousemove", onDocumentMouseMove, false );
+ 				container.addEventListener( "touchmove", onDocumentMouseMove, false );
+-
+ 				container.addEventListener( "mouseup", onDocumentMouseUp, false );
+ 				container.addEventListener( "touchend", onDocumentMouseUp, false );
+-
+ 				container.addEventListener( "wheel", onDocumentMouseWheel, false );
+ 
+ 				window.addEventListener( "resize", onDocumentResize, false );
+-
+ 				document.addEventListener("keypress", onKeyPress, false);
+ 			}
+ 
+@@ -410,6 +414,7 @@
+ 			}
+ 
+ 			function startNewShape(vec) {
++				clearDraw();
+ 				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
+ 
+ 				var geometry = new THREE.BufferGeometry();
+@@ -490,6 +495,7 @@
+ 			}
+ 
+ 			function closeShape() {
++				// turns current line into a polygon (multiple polygons if the line is self-intersecting)
+ 				if (currentLine) {
+ 					currentLine.geometry.computeBoundingSphere();
+ 					var center = new THREE.Vector3();
+@@ -506,6 +512,8 @@
+ 					}
+ 
+ 					function countIntersections(start, vec, i) {
++						// a point is inside a filled area of the polygon if its
++						// corresponding ray has an odd number of intersections
+ 						var s = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT);
+ 						var end = new THREE.Vector3(start.x + s * vec.x, start.y + s * vec.y);
+ 						var j = 0;
+@@ -521,6 +529,8 @@
+ 					}
+ 
+ 					function chooseDirection(start, intersect, a, b, i) {
++						// every intersection has two filled and two unfilled quadrants, chooses
++						// the direction such that the path will hug the filled quadrant
+ 						var original = new THREE.Vector2(start.x - intersect.x, start.y - intersect.y).normalize();
+ 						var a_pt = getPt(a);
+ 						var b_pt = getPt(b);
+@@ -540,6 +550,8 @@
+ 					}
+ 
+ 					function getIntersection(start, end, i) {
++						// returns an intersection of the line from start to end
++						// (the intersection closest to the start pt)
+ 						var j = 0;
+ 						var res = undefined;
+ 						var a;
+@@ -572,7 +584,6 @@
+ 					var limit = 0;
+ 
+ 					function trace(i, p_this, dir, i_intersection) {
+-						// debugPt(p_this, 0x00ff00);
+ 						var pts = [];
+ 						var visited = [];
+ 
+@@ -607,12 +618,14 @@
+ 								i = choice ? a : b;
+ 								i_other = choice ? b : a;
+ 								i_intersection = true;
++								p_this = cross;
++
+ 								// dir is positive if we chose the higher index
+ 								dir = (i == Math.max(a, b) || (Math.min(a, b) == 0)) ? 1 : -1;
+ 
++								// save the other direction for later
+ 								var later = [i_other, getPt(i_other), -dir, true];
+ 								queue.push(later);
+-								p_this = cross;
+ 
+ 							} else {
+ 								p_this = p_next;
+@@ -672,10 +685,7 @@
+ 					document.getElementById('numShapes').textContent = String(scene.children.length - 1)
+ 				}
+ 
+-				if (newShapePt) {
+-					scene.remove(newShapePt);
+-					newShapePt = false;
+-				}
++				clearDraw();
+ 			}
+ 
+ 			function debugPt(vec, c) {
+@@ -708,10 +718,10 @@
+ 				var jitter = 0;
+ 				pta.x += Math.random() * jitter;
+ 				pta.y += Math.random() * jitter;
+-				pta.z = 0;
++				// pta.z = 0;
+ 				ptb.x -= Math.random() * jitter;
+ 				ptb.y -= Math.random() * jitter;
+-				ptb.z = 0;
++				// ptb.z = 0;
+ 
+ 				var geo = new THREE.Geometry();
+ 				geo.vertices.push(pta);
+@@ -760,138 +770,26 @@
+ 			}
+ 
+ 			function render() {
+-				// renderer.render( scene, camera );
+ 				composer.render();
+ 			}
+ 
+-			// Transform
+-			///////////////////////////////////////////////////////////////////
+-			function moveShape(shape, delta) {
+-				// var center = shape.geometry.boundingSphere.center;
+-
+-				var center = {
+-					'x': shape.position.x,
+-					'y': shape.position.y,
+-				};
+-
+-				var p = {
+-					'x': transformOrigin.x + delta.x,
+-					'y': transformOrigin.y + delta.y,
+-				};
+-				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
+-			}
+-
+-			// Events
++			// Color
+ 			///////////////////////////////////////////////////////////////////
+-			// disable right click menu
+-			document.oncontextmenu = function () {
+-				return false;
+-			};
+-
+-			function saveCanvas() {
+-				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
+-				document.getElementById("download").setAttribute("href", img);
+-				document.getElementById("download").setAttribute("download", "asdf.png");
+-			}
+-
+-			function onKeyPress() {
+-				closeShape();
+-			}
+ 
+ 			function startHueShift(event) {
+ 				clearLine();
+-				try {
+-					hoverObj = checkIntersection(event);
+-					if (hoverObj && hoverObj.material.color) {
+-						hueShiftColor = hoverObj.material.color.clone();
+-						showHueWheel(currentPt(), hueShiftColor);
+-						event.preventDefault();
+-						event.stopPropagation();
+-					}
+-				} catch (err) {
+-					console.log(err);
+-				}
+-			}
+-
+-			function onDocumentMouseDown(event) {
+-				if (MODE == 'draw') {
+-					debugEvent(event);
+-					if (event.type === "mousedown" || event.touches !== undefined) {
+-
+-						var now = new Date().getTime();
+-						var since = now - latestTap;
+-						latestTap = new Date().getTime();
+-
+-						if ((since < 200) && since > 0) {
+-							if (event.touches == undefined || event.touches.length == 1) {
+-								// double click > close shape, but only for mouse or single finger
+-								closeShape();
+-							}
+-
+-						} else if (rightClick(event) || event.type == "touchstart" && event.touches.length == 2) {
+-							// right click or double finger drag > shift hue
+-							startHueShift(event);
+-
+-						} else {
+-							// add point
+-							var vec = currentPt();
+-							prevPt = vec;
+-							addPoint(vec.x, vec.y);
+-						}
+-						event.preventDefault();
+-					}
+-
+-				} else if (MODE == 'transform') {
+-					var intersected = checkIntersection(event);
+-					if (intersected && intersected.id != squareBG.id) {
+-						currentObj = setCurrent(intersected);
+-						if (currentObj) {
+-							currentTransformPt = currentPt();
+-
+-							if ((event.type == 'mousedown' && !rightClick(event)) ||
+-								(event.touches && event.touches.length == 1)) {
+-								transformOrigin = getObjectPos(currentObj);
+-
+-							} else if ((event.touches && event.touches.length == 2) ||
+-								(event.type == 'mousedown') && rightClick(event)) {
+-								startScale = pinchDist(event) / currentObj.scale.x;
+-								startRotate = pinchAngle(event);
+-								showLineModal(pinchCenter(event));
+-
+-								if (event.type == 'mousedown') {
+-									transformOrigin = currentObj.position;
+-								}
+-							}
+-						}
+-					}
+-				}
+-				event.preventDefault();
+-			}
+-
+-			function getObjectPos(obj) {
+-				return {
+-					'x': obj.position.x,
+-					'y': obj.position.y
+-				}
+-			}
+-
+-			function flipShapes(event) {
+-				currentObj = currentObj || checkIntersection(event);
+-				if (currentObj && currentObj.id != squareBG.id) {
+-					var delta = mouseDelta(event);
+-					if (event.type == "touchmove") {
+-						delta *= -1;
+-					}
+-					outline(currentObj);
+-					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
+-					zCount = Math.max(currentObj.position.z, zCount);
+-					normalizeZDepths();
++				hoverObj = checkIntersection(event);
++				if (hoverObj && hoverObj.material.color) {
++					hueShiftColor = hoverObj.material.color.clone();
++					showHueWheel(currentPt(), hueShiftColor);
++					event.preventDefault();
++					event.stopPropagation();
+ 				}
+ 			}
+ 
+ 			function shiftHue(event) {
+ 				if (!hoverObj || !lineViz) {
+-					startHueShift();
++					startHueShift(event);
+ 				}
+ 
+ 				clearLine();
+@@ -939,6 +837,35 @@
+ 				lineViz.geometry.verticesNeedUpdate = true;
+ 			}
+ 
++			// Transform
++			///////////////////////////////////////////////////////////////////
++			function moveShape(shape, delta) {
++				var center = {
++					'x': shape.position.x,
++					'y': shape.position.y,
++				};
++
++				var p = {
++					'x': transformOrigin.x + delta.x,
++					'y': transformOrigin.y + delta.y,
++				};
++				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
++			}
++
++			function flipShapes(event) {
++				currentObj = currentObj || checkIntersection(event);
++				if (currentObj && currentObj.id != squareBG.id) {
++					var delta = mouseDelta(event);
++					if (event.type == "touchmove") {
++						delta *= -1;
++					}
++					outline(currentObj);
++					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
++					zCount = Math.max(currentObj.position.z, zCount);
++					normalizeZDepths();
++				}
++			}
++
+ 			function scaleRotateTransform(event) {
+ 				if (currentObj != undefined) {
+ 
+@@ -964,21 +891,132 @@
+ 				}
+ 			}
+ 
+-			function onDocumentMouseMove(event) {
++			function getObjectPos(obj) {
++				return {
++					'x': obj.position.x,
++					'y': obj.position.y
++				}
++			}
++
++			// Clearing
++			///////////////////////////////////////////////////////////////////
++
++			function clearDraw() {
++				if (newShapePt) {
++					scene.remove(newShapePt);
++					newShapePt = false;
++				}
++			}
++
++			function clearCanvas() {
++				if (currentObj) {
++					console.log(currentObj.geometry.boundingSphere);
++					currentObj.geometry.computeBoundingSphere();
++					console.log(currentObj.geometry.boundingSphere);
++				}
++
++				// clear color
++				clearHueShift()
++				hoverObj = false;
++
++				// clear transform
++				currentTransformPt = false;
++				setCurrent(false);
++			}
++
++			function clearHueShift(hueOnly=false) {
++				if (lineViz) {
++					scene.remove(hueViz);
++					hueViz = false;
++					if (!hueOnly) {
++						scene.remove(lineViz);
++						lineViz = false;
++					}
++					return true;
++				}
++			}
++
++			function clearLine() {
++				if (currentLine) {
++					scene.remove(currentLine);
++					currentLine = false;
++					p_idx = 0;
++					return true;
++				}
++			}
++
++			// Events
++			///////////////////////////////////////////////////////////////////
++			// disable right click menu
++			// document.oncontextmenu = function () {
++			// 	return false;
++			// };
++
++			function saveCanvas() {
++				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
++				document.getElementById("download").setAttribute("href", img);
++				document.getElementById("download").setAttribute("download", "asdf.png");
++			}
++
++			function onKeyPress() {
++				closeShape();
++			}
++
++			function onDocumentMouseDown(event) {
+ 				if (MODE == 'draw') {
+-					debugEvent(event);
+ 
+-					if (event.type == "touchmove" && event.touches.length == 3) {
++					if (event.type === "mousedown" || event.touches != undefined) {
++						if (doubleClick(event)) {
++							// double click > close shape, but only for mouse or single finger
++							closeShape();
+ 
+-						shiftValue(event);
++						} else {
++							// add point
++							var vec = currentPt();
++							prevPt = vec;
++							addPoint(vec.x, vec.y);
++						}
++						event.preventDefault();
++					}
+ 
+-					} else if ((rightClick(event) ||
+-							(event.type == "touchmove" && event.touches.length == 2))) {
++				} else if (MODE == 'color') {
++					if (event.type == 'mousedown' && leftClick(event)) {
++						startHueShift(event);
++					}
++					event.preventDefault();
+ 
+-						shiftHue(event);
++				} else if (MODE == 'transform') {
++					var intersected = checkIntersection(event);
++					if (intersected && intersected.id != squareBG.id) {
++						currentObj = setCurrent(intersected);
++						if (currentObj) {
++							currentTransformPt = currentPt();
++
++							if ((event.type == 'mousedown' && !rightClick(event)) ||
++								(event.touches && event.touches.length == 1)) {
++								transformOrigin = getObjectPos(currentObj);
+ 
+-						// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
+-					} else if ((event.type == "mousemove" || event.touches.length == 1)) {
++							} else if ((event.touches && event.touches.length == 2) ||
++								(event.type == 'mousedown') && rightClick(event)) {
++								startScale = pinchDist(event) / currentObj.scale.x;
++								startRotate = pinchAngle(event);
++								showLineModal(pinchCenter(event));
++
++								if (event.type == 'mousedown') {
++									transformOrigin = currentObj.position;
++								}
++							}
++						}
++					}
++				}
++				event.preventDefault();
++			}
++
++			function onDocumentMouseMove(event) {
++				if (MODE == 'draw') {
++
++					// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
++					if ((event.type == "mousemove" || event.touches.length == 1)) {
+ 						if (prevPt) {
+ 							var vec = currentPt();
+ 							if (sqdist(vec, prevPt) > PREV_DIST) {
+@@ -987,6 +1025,21 @@
+ 							}
+ 						}
+ 					}
++
++				} else if (MODE == 'color') {
++
++					if (event.type == "touchmove" && event.touches.length == 3) {
++
++						shiftValue(event);
++
++					} else if ((event.type == "mousemove" && event.buttons == 1) ||
++							(event.type == "touchmove" && event.touches.length == 2)) {
++
++						console.log(event.buttons);
++						shiftHue(event);
++
++					}
++
+ 				} else if (MODE == 'transform') {
+ 					if (currentObj && currentTransformPt) {
+ 						if (event.type == "touchmove" && event.touches.length == 3) {
+@@ -1010,22 +1063,8 @@
+ 				event.preventDefault();
+ 			}
+ 
+-			function onDocumentMouseUp(event) {
+-				debugEvent(event);
+-				if (currentObj) {
+-					console.log(currentObj.geometry.boundingSphere);
+-					currentObj.geometry.computeBoundingSphere();
+-					console.log(currentObj.geometry.boundingSphere);
+-				}
+-
+-				// clear draw
+-				clearHueShift()
+-				hoverObj = false;
+-
+-				// clear transform
+-				currentTransformPt = false;
+-				setCurrent(false);
+ 
++			function onDocumentMouseUp(event) {
+ 				if (event.type == "mouseup" || event.touches.length == 0) {
+ 					prevPt = false;
+ 					latestDrag = false;
+@@ -1033,7 +1072,7 @@
+ 			}
+ 
+ 			function onDocumentMouseWheel(event) {
+-				if (MODE == 'draw') {
++				if (MODE == 'color') {
+ 					clearHueShift(hueOnly=(event.type == "touchmove"));
+ 					clearLine();
+ 
+@@ -1050,17 +1089,13 @@
+ 
+ 						hoverObj.material.color.setHSL(hsl.h, deltaS, deltaL);
+ 					}
++
+ 				} else if (MODE == 'transform') {
+ 					flipShapes(event);
+ 				}
+ 				event.preventDefault();
+ 			}
+ 
+-			function debugEvent(event) {
+-				// console.log(event.type);
+-				// console.log(event.touches.length);
+-			}
+-
+ 			function onDocumentResize() {
+ 				var dim = Math.min(window.innerWidth, window.innerHeight) * 0.84;
+ 				document.getElementById("container2").style.width = dim + "px"
+@@ -1075,27 +1110,6 @@
+ 			// Utility
+ 			///////////////////////////////////////////////////////////////////
+ 
+-			function clearHueShift(hueOnly=false) {
+-				if (lineViz) {
+-					scene.remove(hueViz);
+-					hueViz = false;
+-					if (!hueOnly) {
+-						scene.remove(lineViz);
+-						lineViz = false;
+-					}
+-					return true;
+-				}
+-			}
+-
+-			function clearLine() {
+-				if (currentLine) {
+-					scene.remove(currentLine);
+-					currentLine = false;
+-					p_idx = 0;
+-					return true;
+-				}
+-			}
+-
+ 			function normalizeZDepths() {
+ 				var sorted = scene.children.map(function(a) {
+ 					return {'id': a.id, 'z': a.position.z }
+@@ -1121,13 +1135,11 @@
+ 			}
+ 
+ 			function canvasPt(v, flipY=true) {
+-				var vec = new THREE.Vector3(); // create once and reuse
+ 				var bb = document.getElementById("canvas").getBoundingClientRect();
+ 				var flip = flipY ? -1 : 1;
+-				vec.set(((v.x) / bb.width) * 2,
++				return new THREE.Vector3(((v.x) / bb.width) * 2,
+ 					(flip * (v.y) / bb.height) * 2,
+ 					0.5 );
+-				return vec;
+ 			}
+ 
+ 			function pinchCenter(event) {
+@@ -1142,10 +1154,9 @@
+ 			}
+ 
+ 			function pinchDist(event) {
+-				var p1, p2;
+ 				if (event.touches == undefined) {
+-					p1 = currentPt();
+-					p2 = {x: currentObj.position.x, y: currentObj.position.y};
++					var p1 = currentPt();
++					var p2 = {x: currentObj.position.x, y: currentObj.position.y};
+ 					return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+ 				} else if (event.touches.length == 2) {
+ 					return Math.sqrt(
+@@ -1155,24 +1166,18 @@
+ 				}
+ 			}
+ 
+-			function consoleLog(a) {
+-				document.getElementById('console').textContent = a;
+-			}
+-
+ 			function pinchAngle(event) {
+ 				var p1, p2;
+ 				if (currentObj && event.touches == undefined) {
+ 					p1 = currentPt();
+ 					p2 = {x: currentObj.position.x, y: currentObj.position.y};
+-					var res = Math.atan2((p2.y - p1.y), (p2.x - p1.x));
+-					return res;
++					return Math.atan2((p2.y - p1.y), (p2.x - p1.x));
+ 
+ 				} else if (event.touches.length == 2) {
+-					var res = Math.atan2(
++					return Math.atan2(
+ 						(event.touches[0].clientY - event.touches[1].clientY),
+ 						(event.touches[1].clientX - event.touches[0].clientX)
+ 					)
+-					return res
+ 				}
+ 			}
+ 
+@@ -1233,18 +1238,23 @@
+ 
+ 			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
+ 
+-			function clockwise(v1, v2) {
+-				return !(v1.y * v2.x > v1.x * v2.y);
+-			}
+-
++			function clockwise(v1, v2) { return !(v1.y * v2.x > v1.x * v2.y); }
+ 
+ 			function rightClick(event) { return ("which" in event) ? event.which == 3 : event.button == 2; }
+ 
++			function leftClick(event) { return ("which" in event) ? event.which == 1 : event.button == 0; }
++
++			function doubleClick(event) {
++				var now = new Date().getTime();
++				var since = now - latestTap;
++				latestTap = new Date().getTime();
++
++				return (since < 200 && since > 0 && (event.touches == undefined || event.touches.length == 1));
++			}
++
+ 			// returns true iff the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
+ 			//https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
+ 			function intersects(a,b,c,d,p,q,r,s) {
+-				// debugPt(new THREE.Vector2(c, d), 0xbd1efc);
+-				// console.log(a, b, c, d);
+ 				var det, gamma, lambda;
+ 				det = (c - a) * (s - q) - (r - p) * (d - b);
+ 				if (det === 0) {
+@@ -1264,9 +1274,11 @@
+ 					}
+ 				}
+ 			}
++
+ 			function ptsIntersect(p, q, r, s) {
+ 				return intersects(p.x, p.y, q.x, q.y, r.x, r.y, s.x, s.y);
+ 			}
++
+ 		</script>
+ 
+ 	</body>

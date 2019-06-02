@@ -39,7 +39,7 @@
 				height: 100%;
 			}
 			#menu #menu-container {
-				padding: 40px;
+				padding: 30px;
 				margin: 20px;
 				background: black;
 				top: 0;
@@ -47,6 +47,7 @@
 				left: 0;
 				right: 0;
 				position: absolute;
+				overflow-y: scroll;
 			}
 			#icons {
 				position: fixed;
@@ -65,35 +66,11 @@
 				padding: 5px;
 				width: 60px;
 				height: 60px;
-				cursor: pointer;
 				display: none;
 			}
 			@media only screen and (orientation: landscape) {
-				#icons {
-					top: 50%;
-					margin-left: 0;
-					margin-top: -35px;
-					/*height: 150px;*/
-				}
-				#icons a {
-					/*height: 140px;*/
-					/*vertical-align: middle;*/
-				}
-				#icons a i {
-					line-height: 55px;
-				}
-			}
-			@media only screen and (orientation: portrait) {
-				#icons {
-					left: 0;
-					right: 0;
-					bottom: 0;
-					margin-left: auto;
-					margin-right: auto;
-					/*width: 150px;*/
-				}
-				#icons a {
-					/*width: 140px;*/
+				#icon-menu {
+					width: 30px;
 				}
 			}
 			#icons a.active {
@@ -102,23 +79,31 @@
 			#icons a i {
 				font-size: 40pt;
 			}
-			#toggle-menu {
+			#icon-menu {
 				position: fixed;
 				left: 0;
 				top: 0;
-				font-size: 18pt;
+				padding: 0;
+				margin: 5px;
+			}
+			#icon-menu i {
+				width: 30px;
+				line-height: 30px;
+				height: 30px;
+				display: inline-block;
 				cursor: pointer;
-				padding: 10px;
+				opacity: 0.3;
+				float: left;
+				margin: 5px;
+			}
+			#icon-menu i.active {
+				opacity: 1.0;
 			}
 			.close {
 				position: absolute;
 				top: 15px;
 				right: 15px;
 				cursor: pointer;
-			}
-			.menu-icons {
-				bottom: 30px;
-				position: absolute;
 			}
 			.menu-icons i {
 				cursor: pointer;
@@ -139,11 +124,13 @@
 		</style>
 	</head>
 	<body>
-		<a id="toggle-menu" onClick="toggleModal()">?</a>
-		<div id="icons">
-			<a id="draw-tool" title="move mode" class="active" onClick="transformTool()"><i class="material-icons">open_with</i></a>
-			<a id="transform-tool" title="draw mode" onClick="drawTool()"><i class="material-icons">edit</i></a>
+		<div id='icon-menu'>
+			<a id="toggle-menu" onClick="toggleModal()"><i class="material-icons">help</i></a>
+			<a title="shape"><i class="tool-icon material-icons draw-tool active" data-mode="draw">category</i></a>
+			<a title="color"><i class="tool-icon material-icons color-tool" data-mode="color">palette</i></a>
+			<a title="transform"><i class="tool-icon material-icons transform-tool" data-mode="transform">open_with</i></a>
 		</div>
+
 		<div id="container">
 			<div id="container2">
 				<canvas id="canvas">Your browser does not support Canvas.</canvas>
@@ -151,13 +138,21 @@
 				<div id="menu">
 					<div id="menu-container">
 						<i class="material-icons close" onClick="toggleModal()">close</i>
+						<div class="menu-icons">
+							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
+							<a href="https://github.com/narobins" target="_blank"><i class="material-icons" alt="code">code</i></a>
+						</p>
 						<h2>About</h2>
-						<p>What if drawing interfaces streamlined design decisions (shape, composition, color) rather than mimicking physical media?</p>
+						<p>What if drawing interfaces emphasized design decisions (shape, composition, color) rather than mimicking physical media?</p>
+
 						<h2>Usage</h2>
-						<h3>Draw mode</h3>
-						<p><span class='fixed'>Left click drag</span>: draw shape</p>
+						<h3>Shape mode</h3>
+						<p><span class='fixed'>Click and drag</span>: draw shape</p>
 						<p><span class='fixed'>Double click</span>: close shape</p>
-						<p><span class='fixed'>Right click drag</span>: shift hue</p>
+
+						<h3>Color mode</h3>
+						<p><span class='fixed'>Click</span>: select shape</p>
+						<p><span class='fixed'>Click and drag</span>: shift hue</p>
 						<p><span class='fixed'>Vertical scroll</span>: shift value</p>
 
 						<h3>Move mode</h3>
@@ -167,10 +162,6 @@
 						<h2>Stats</h2>
 						<p><span id='numShapes'>0</span> shapes, <span id='numVertices'>0</span> vertices</p>
 						<br />
-						<p class="menu-icons">
-							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
-							<a href="https://github.com/narobins" target="_blank"><i class="material-icons" alt="code">code</i></a>
-						</p>
 					</div>
 				</div>
 			</div>
@@ -178,8 +169,6 @@
 
 		<script src="https://threejs.org/build/three.js"></script>
 
-		<!-- <script src="three.min.js"></script> -->
-		<!-- <script src="https://threejs.org/build/three.js"></script> -->
 		<script src="https://threejs.org/examples/js/WebGL.js"></script>
 
 		<script src="https://threejs.org/examples/js/shaders/CopyShader.js"></script>
@@ -248,6 +237,7 @@
 			var START_COLOR = new THREE.Color();
 			START_COLOR.setHSL(Math.random(), Math.random() * 0.6 + 0.2, Math.random() * 0.6 + 0.2);
 			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
+			var EPSILON = 0.0001;
 			var MODE = 'draw';
 
 			// draw
@@ -294,6 +284,10 @@
 			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
 				toggleModal();
 			})
+			var toolIcons = document.getElementsByClassName('tool-icon');
+			for (var i = 0; i < toolIcons.length; i++) {
+				toolIcons[i].addEventListener('mousedown', switchTool)
+			}
 
 			function toggleModal() {
 				var menu = document.getElementById("menu");
@@ -306,20 +300,16 @@
 				}
 			}
 
-			function drawTool() {
-				document.getElementById("draw-tool").className = "active";
-				document.getElementById("transform-tool").className = "";
-				document.getElementById("toggle-menu").className = "";
-				MODE = 'draw';
-				document.body.style.cursor = 'crosshair';
-			}
-
-			function transformTool() {
-				document.getElementById("draw-tool").className = "";
-				document.getElementById("transform-tool").className = "active";
-				document.getElementById("toggle-menu").className = "";
-				MODE = 'transform';
-				document.body.style.cursor = 'move';
+			function switchTool(e) {
+				e.target.className = "material-icons tool-icon active";
+				MODE = e.target.getAttribute('data-mode');
+				for (var i = 0; i < toolIcons.length; i++) {
+					if (toolIcons[i].getAttribute('data-mode') != MODE) {
+						toolIcons[i].className = "material-icons tool-icon";
+					}
+				}
+				clearCanvas();
+				clearDraw();
 			}
 
 			function initDim() {
@@ -329,7 +319,6 @@
 			}
 
 			function init() {
-				container = document.getElementById( "container" );
 				var bb = document.getElementById("canvas").getBoundingClientRect();
 
 				var aspect = bb.width / bb.height;
@@ -343,11 +332,6 @@
 					frustum / - 2,
 					1,
 					2 * MAX_ZDEPTH + 1 );
-				camera.rotation.x = 0;
-				camera.rotation.y = 0;
-				camera.rotation.z = 0;
-				camera.position.x = 0;
-				camera.position.y = 0;
 				camera.position.z = MAX_ZDEPTH + 1;
 
 				scene = new THREE.Scene();
@@ -372,7 +356,6 @@
 				composer.setSize( bb.width, bb.height );
 				var renderPass = new THREE.RenderPass( scene, camera );
 				composer.addPass( renderPass );
-				// renderPass.renderToScreen = true;
 
 				outlinePass = new THREE.OutlinePass( new THREE.Vector2( bb.width, bb.height ), scene, camera );
 				outlinePass.edgeStrength = 0.5;
@@ -389,17 +372,13 @@
 
 				container.addEventListener( "mousedown", onDocumentMouseDown, false );
 				container.addEventListener( "touchstart", onDocumentMouseDown, false );
-
 				container.addEventListener( "mousemove", onDocumentMouseMove, false );
 				container.addEventListener( "touchmove", onDocumentMouseMove, false );
-
 				container.addEventListener( "mouseup", onDocumentMouseUp, false );
 				container.addEventListener( "touchend", onDocumentMouseUp, false );
-
 				container.addEventListener( "wheel", onDocumentMouseWheel, false );
 
 				window.addEventListener( "resize", onDocumentResize, false );
-
 				document.addEventListener("keypress", onKeyPress, false);
 			}
 
@@ -410,6 +389,7 @@
 			}
 
 			function startNewShape(vec) {
+				clearDraw();
 				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
 
 				var geometry = new THREE.BufferGeometry();
@@ -490,6 +470,7 @@
 			}
 
 			function closeShape() {
+				// turns current line into a polygon (multiple polygons if the line is self-intersecting)
 				if (currentLine) {
 					currentLine.geometry.computeBoundingSphere();
 					var center = new THREE.Vector3();
@@ -506,6 +487,8 @@
 					}
 
 					function countIntersections(start, vec, i) {
+						// a point is inside a filled area of the polygon if its
+						// corresponding ray has an odd number of intersections
 						var s = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT);
 						var end = new THREE.Vector3(start.x + s * vec.x, start.y + s * vec.y);
 						var j = 0;
@@ -521,6 +504,8 @@
 					}
 
 					function chooseDirection(start, intersect, a, b, i) {
+						// every intersection has two filled and two unfilled quadrants, chooses
+						// the direction such that the path will hug the filled quadrant
 						var original = new THREE.Vector2(start.x - intersect.x, start.y - intersect.y).normalize();
 						var a_pt = getPt(a);
 						var b_pt = getPt(b);
@@ -540,6 +525,8 @@
 					}
 
 					function getIntersection(start, end, i) {
+						// returns an intersection of the line from start to end
+						// (the intersection closest to the start pt)
 						var j = 0;
 						var res = undefined;
 						var a;
@@ -572,7 +559,6 @@
 					var limit = 0;
 
 					function trace(i, p_this, dir, i_intersection) {
-						// debugPt(p_this, 0x00ff00);
 						var pts = [];
 						var visited = [];
 
@@ -607,12 +593,14 @@
 								i = choice ? a : b;
 								i_other = choice ? b : a;
 								i_intersection = true;
+								p_this = cross;
+
 								// dir is positive if we chose the higher index
 								dir = (i == Math.max(a, b) || (Math.min(a, b) == 0)) ? 1 : -1;
 
+								// save the other direction for later
 								var later = [i_other, getPt(i_other), -dir, true];
 								queue.push(later);
-								p_this = cross;
 
 							} else {
 								p_this = p_next;
@@ -672,10 +660,7 @@
 					document.getElementById('numShapes').textContent = String(scene.children.length - 1)
 				}
 
-				if (newShapePt) {
-					scene.remove(newShapePt);
-					newShapePt = false;
-				}
+				clearDraw();
 			}
 
 			function debugPt(vec, c) {
@@ -708,10 +693,10 @@
 				var jitter = 0;
 				pta.x += Math.random() * jitter;
 				pta.y += Math.random() * jitter;
-				pta.z = 0;
+				// pta.z = 0;
 				ptb.x -= Math.random() * jitter;
 				ptb.y -= Math.random() * jitter;
-				ptb.z = 0;
+				// ptb.z = 0;
 
 				var geo = new THREE.Geometry();
 				geo.vertices.push(pta);
@@ -760,138 +745,26 @@
 			}
 
 			function render() {
-				// renderer.render( scene, camera );
 				composer.render();
 			}
 
-			// Transform
+			// Color
 			///////////////////////////////////////////////////////////////////
-			function moveShape(shape, delta) {
-				// var center = shape.geometry.boundingSphere.center;
-
-				var center = {
-					'x': shape.position.x,
-					'y': shape.position.y,
-				};
-
-				var p = {
-					'x': transformOrigin.x + delta.x,
-					'y': transformOrigin.y + delta.y,
-				};
-				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
-			}
-
-			// Events
-			///////////////////////////////////////////////////////////////////
-			// disable right click menu
-			document.oncontextmenu = function () {
-				return false;
-			};
-
-			function saveCanvas() {
-				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
-				document.getElementById("download").setAttribute("href", img);
-				document.getElementById("download").setAttribute("download", "asdf.png");
-			}
-
-			function onKeyPress() {
-				closeShape();
-			}
 
 			function startHueShift(event) {
 				clearLine();
-				try {
-					hoverObj = checkIntersection(event);
-					if (hoverObj && hoverObj.material.color) {
-						hueShiftColor = hoverObj.material.color.clone();
-						showHueWheel(currentPt(), hueShiftColor);
-						event.preventDefault();
-						event.stopPropagation();
-					}
-				} catch (err) {
-					console.log(err);
-				}
-			}
-
-			function onDocumentMouseDown(event) {
-				if (MODE == 'draw') {
-					debugEvent(event);
-					if (event.type === "mousedown" || event.touches !== undefined) {
-
-						var now = new Date().getTime();
-						var since = now - latestTap;
-						latestTap = new Date().getTime();
-
-						if ((since < 200) && since > 0) {
-							if (event.touches == undefined || event.touches.length == 1) {
-								// double click > close shape, but only for mouse or single finger
-								closeShape();
-							}
-
-						} else if (rightClick(event) || event.type == "touchstart" && event.touches.length == 2) {
-							// right click or double finger drag > shift hue
-							startHueShift(event);
-
-						} else {
-							// add point
-							var vec = currentPt();
-							prevPt = vec;
-							addPoint(vec.x, vec.y);
-						}
-						event.preventDefault();
-					}
-
-				} else if (MODE == 'transform') {
-					var intersected = checkIntersection(event);
-					if (intersected && intersected.id != squareBG.id) {
-						currentObj = setCurrent(intersected);
-						if (currentObj) {
-							currentTransformPt = currentPt();
-
-							if ((event.type == 'mousedown' && !rightClick(event)) ||
-								(event.touches && event.touches.length == 1)) {
-								transformOrigin = getObjectPos(currentObj);
-
-							} else if ((event.touches && event.touches.length == 2) ||
-								(event.type == 'mousedown') && rightClick(event)) {
-								startScale = pinchDist(event) / currentObj.scale.x;
-								startRotate = pinchAngle(event);
-								showLineModal(pinchCenter(event));
-
-								if (event.type == 'mousedown') {
-									transformOrigin = currentObj.position;
-								}
-							}
-						}
-					}
-				}
-				event.preventDefault();
-			}
-
-			function getObjectPos(obj) {
-				return {
-					'x': obj.position.x,
-					'y': obj.position.y
-				}
-			}
-
-			function flipShapes(event) {
-				currentObj = currentObj || checkIntersection(event);
-				if (currentObj && currentObj.id != squareBG.id) {
-					var delta = mouseDelta(event);
-					if (event.type == "touchmove") {
-						delta *= -1;
-					}
-					outline(currentObj);
-					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
-					zCount = Math.max(currentObj.position.z, zCount);
-					normalizeZDepths();
+				hoverObj = checkIntersection(event);
+				if (hoverObj && hoverObj.material.color) {
+					hueShiftColor = hoverObj.material.color.clone();
+					showHueWheel(currentPt(), hueShiftColor);
+					event.preventDefault();
+					event.stopPropagation();
 				}
 			}
 
 			function shiftHue(event) {
 				if (!hoverObj || !lineViz) {
-					startHueShift();
+					startHueShift(event);
 				}
 
 				clearLine();
@@ -939,6 +812,35 @@
 				lineViz.geometry.verticesNeedUpdate = true;
 			}
 
+			// Transform
+			///////////////////////////////////////////////////////////////////
+			function moveShape(shape, delta) {
+				var center = {
+					'x': shape.position.x,
+					'y': shape.position.y,
+				};
+
+				var p = {
+					'x': transformOrigin.x + delta.x,
+					'y': transformOrigin.y + delta.y,
+				};
+				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
+			}
+
+			function flipShapes(event) {
+				currentObj = currentObj || checkIntersection(event);
+				if (currentObj && currentObj.id != squareBG.id) {
+					var delta = mouseDelta(event);
+					if (event.type == "touchmove") {
+						delta *= -1;
+					}
+					outline(currentObj);
+					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
+					zCount = Math.max(currentObj.position.z, zCount);
+					normalizeZDepths();
+				}
+			}
+
 			function scaleRotateTransform(event) {
 				if (currentObj != undefined) {
 
@@ -964,21 +866,136 @@
 				}
 			}
 
+			function getObjectPos(obj) {
+				return {
+					'x': obj.position.x,
+					'y': obj.position.y
+				}
+			}
+
+			// Clearing
+			///////////////////////////////////////////////////////////////////
+
+			function clearDraw() {
+				if (newShapePt) {
+					scene.remove(newShapePt);
+					newShapePt = false;
+				}
+			}
+
+			function clearCanvas() {
+				if (currentObj) {
+					currentObj.geometry.computeBoundingSphere();
+				}
+
+				// clear color
+				clearHueShift()
+				hoverObj = false;
+
+				// clear transform
+				currentTransformPt = false;
+				setCurrent(false);
+			}
+
+			function clearHueShift(hueOnly=false) {
+				if (lineViz) {
+					scene.remove(hueViz);
+					hueViz = false;
+					if (!hueOnly) {
+						scene.remove(lineViz);
+						lineViz = false;
+					}
+					return true;
+				}
+			}
+
+			function clearLine() {
+				if (currentLine) {
+					scene.remove(currentLine);
+					currentLine = false;
+					p_idx = 0;
+					return true;
+				}
+			}
+
+			// Events
+			///////////////////////////////////////////////////////////////////
+			// disable right click menu
+			// document.oncontextmenu = function () {
+			// 	return false;
+			// };
+
+			function saveCanvas() {
+				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
+				document.getElementById("download").setAttribute("href", img);
+				document.getElementById("download").setAttribute("download", "asdf.png");
+			}
+
+			function onKeyPress() {
+				closeShape();
+			}
+
+			function onDocumentMouseDown(event) {
+				if (MODE == 'draw') {
+
+					if (event.type === "mousedown" || event.touches != undefined) {
+						if (doubleClick(event)) {
+							// double click > close shape, but only for mouse or single finger
+							closeShape();
+
+						} else {
+							// add point
+							var vec = currentPt();
+							prevPt = vec;
+							addPoint(vec.x, vec.y);
+						}
+						event.preventDefault();
+					}
+
+				} else if (MODE == 'color') {
+					if ((event.type == 'mousedown' && leftClick(event)) ||
+						(event.type == 'touchstart' && event.touches == 2)) {
+						startHueShift(event);
+
+					} else if (event.type == 'touchstart' && event.touches == 1) {
+						var intersected = checkIntersection(event);
+						if (intersected && intersected.id != squareBG.id) {
+							currentObj = setCurrent(intersected);
+						}
+					}
+					event.preventDefault();
+
+				} else if (MODE == 'transform') {
+					var intersected = checkIntersection(event);
+					if (intersected && intersected.id != squareBG.id) {
+						currentObj = setCurrent(intersected);
+						if (currentObj) {
+							currentTransformPt = currentPt();
+
+							if ((event.type == 'mousedown' && !rightClick(event)) ||
+								(event.touches && event.touches.length == 1)) {
+								transformOrigin = getObjectPos(currentObj);
+
+							} else if ((event.touches && event.touches.length == 2) ||
+								(event.type == 'mousedown') && rightClick(event)) {
+								startScale = pinchDist(event) / currentObj.scale.x;
+								startRotate = pinchAngle(event);
+								showLineModal(pinchCenter(event));
+
+								if (event.type == 'mousedown') {
+									transformOrigin = currentObj.position;
+								}
+							}
+						}
+					}
+				}
+				event.preventDefault();
+			}
+
 			function onDocumentMouseMove(event) {
 				if (MODE == 'draw') {
-					debugEvent(event);
 
-					if (event.type == "touchmove" && event.touches.length == 3) {
-
-						shiftValue(event);
-
-					} else if ((rightClick(event) ||
-							(event.type == "touchmove" && event.touches.length == 2))) {
-
-						shiftHue(event);
-
-						// hoverObj.material.color.g = clamp(hoverObj.material.color.g + diff / 200.0, 0.0, 1.0);
-					} else if ((event.type == "mousemove" || event.touches.length == 1)) {
+					if ((event.type == "mousemove" || event.touches.length == 1)) {
 						if (prevPt) {
 							var vec = currentPt();
 							if (sqdist(vec, prevPt) > PREV_DIST) {
@@ -987,6 +1004,19 @@
 							}
 						}
 					}
+
+				} else if (MODE == 'color') {
+
+					if (event.type == "touchmove" && event.touches.length == 3) {
+
+						shiftValue(event);
+
+					} else if ((event.type == "mousemove" && event.buttons == 1) ||
+							(event.type == "touchmove" && event.touches.length == 2)) {
+
+						shiftHue(event);
+					}
+
 				} else if (MODE == 'transform') {
 					if (currentObj && currentTransformPt) {
 						if (event.type == "touchmove" && event.touches.length == 3) {
@@ -1011,20 +1041,21 @@
 			}
 
 			function onDocumentMouseUp(event) {
-				debugEvent(event);
-				if (currentObj) {
-					console.log(currentObj.geometry.boundingSphere);
-					currentObj.geometry.computeBoundingSphere();
-					console.log(currentObj.geometry.boundingSphere);
+				if (MODE == "draw" || MODE == "transform" ||
+					(MODE == "color" && event.type == "mouseup")) {
+					if (currentObj) {
+						currentObj.geometry.computeBoundingSphere();
+					}
+
+					// clear draw
+					clearHueShift()
+					hoverObj = false;
+
+					// clear transform
+					currentTransformPt = false;
+
+					setCurrent(false);
 				}
-
-				// clear draw
-				clearHueShift()
-				hoverObj = false;
-
-				// clear transform
-				currentTransformPt = false;
-				setCurrent(false);
 
 				if (event.type == "mouseup" || event.touches.length == 0) {
 					prevPt = false;
@@ -1033,7 +1064,7 @@
 			}
 
 			function onDocumentMouseWheel(event) {
-				if (MODE == 'draw') {
+				if (MODE == "color") {
 					clearHueShift(hueOnly=(event.type == "touchmove"));
 					clearLine();
 
@@ -1050,15 +1081,11 @@
 
 						hoverObj.material.color.setHSL(hsl.h, deltaS, deltaL);
 					}
-				} else if (MODE == 'transform') {
+
+				} else if (MODE == "transform") {
 					flipShapes(event);
 				}
 				event.preventDefault();
-			}
-
-			function debugEvent(event) {
-				// console.log(event.type);
-				// console.log(event.touches.length);
 			}
 
 			function onDocumentResize() {
@@ -1066,39 +1093,18 @@
 				document.getElementById("container2").style.width = dim + "px"
 				document.getElementById("container2").style.height = dim + "px"
 				if (renderer != undefined) {
-					renderer.setSize( dim, dim );
-					composer.setSize( dim, dim );
-					// effectFXAA.uniforms[ 'resolution' ].value.set( 1 / window.innerWidth, 1 / window.innerHeight );
+					renderer.setSize(dim, dim);
+					composer.setSize(dim, dim);
+					// effectFXAA.uniforms[ "resolution" ].value.set( 1 / window.innerWidth, 1 / window.innerHeight );
 				}
 			}
 
 			// Utility
 			///////////////////////////////////////////////////////////////////
 
-			function clearHueShift(hueOnly=false) {
-				if (lineViz) {
-					scene.remove(hueViz);
-					hueViz = false;
-					if (!hueOnly) {
-						scene.remove(lineViz);
-						lineViz = false;
-					}
-					return true;
-				}
-			}
-
-			function clearLine() {
-				if (currentLine) {
-					scene.remove(currentLine);
-					currentLine = false;
-					p_idx = 0;
-					return true;
-				}
-			}
-
 			function normalizeZDepths() {
 				var sorted = scene.children.map(function(a) {
-					return {'id': a.id, 'z': a.position.z }
+					return {"id": a.id, "z": a.position.z }
 				});
 				sorted.sort((a, b) => a.z - b.z);
 				var count = 0;
@@ -1121,13 +1127,11 @@
 			}
 
 			function canvasPt(v, flipY=true) {
-				var vec = new THREE.Vector3(); // create once and reuse
 				var bb = document.getElementById("canvas").getBoundingClientRect();
 				var flip = flipY ? -1 : 1;
-				vec.set(((v.x) / bb.width) * 2,
+				return new THREE.Vector3(((v.x) / bb.width) * 2,
 					(flip * (v.y) / bb.height) * 2,
 					0.5 );
-				return vec;
 			}
 
 			function pinchCenter(event) {
@@ -1142,10 +1146,9 @@
 			}
 
 			function pinchDist(event) {
-				var p1, p2;
 				if (event.touches == undefined) {
-					p1 = currentPt();
-					p2 = {x: currentObj.position.x, y: currentObj.position.y};
+					var p1 = currentPt();
+					var p2 = {x: currentObj.position.x, y: currentObj.position.y};
 					return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
 				} else if (event.touches.length == 2) {
 					return Math.sqrt(
@@ -1155,24 +1158,18 @@
 				}
 			}
 
-			function consoleLog(a) {
-				document.getElementById('console').textContent = a;
-			}
-
 			function pinchAngle(event) {
 				var p1, p2;
 				if (currentObj && event.touches == undefined) {
 					p1 = currentPt();
 					p2 = {x: currentObj.position.x, y: currentObj.position.y};
-					var res = Math.atan2((p2.y - p1.y), (p2.x - p1.x));
-					return res;
+					return Math.atan2((p2.y - p1.y), (p2.x - p1.x));
 
 				} else if (event.touches.length == 2) {
-					var res = Math.atan2(
+					return Math.atan2(
 						(event.touches[0].clientY - event.touches[1].clientY),
 						(event.touches[1].clientX - event.touches[0].clientX)
 					)
-					return res
 				}
 			}
 
@@ -1224,8 +1221,8 @@
 			function currentPt() {
 				var vec = mouseToCanvasPt();
 				vec.unproject( camera );
-				vec.x = Math.max(-CANVAS_WIDTH, Math.min(vec.x, CANVAS_WIDTH));
-				vec.y = Math.max(-CANVAS_HEIGHT, Math.min(vec.y, CANVAS_HEIGHT));
+				vec.x = clamp(vec.x, -CANVAS_WIDTH, CANVAS_WIDTH);
+				vec.y = clamp(vec.y, -CANVAS_HEIGHT, CANVAS_HEIGHT);
 				return vec;
 			}
 
@@ -1233,18 +1230,31 @@
 
 			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
 
-			function clockwise(v1, v2) {
-				return !(v1.y * v2.x > v1.x * v2.y);
-			}
-
+			function clockwise(v1, v2) { return !(v1.y * v2.x > v1.x * v2.y); }
 
 			function rightClick(event) { return ("which" in event) ? event.which == 3 : event.button == 2; }
+
+			function leftClick(event) { return ("which" in event) ? event.which == 1 : event.button == 0; }
+
+			function doubleClick(event) {
+				var now = new Date().getTime();
+				var since = now - latestTap;
+				latestTap = new Date().getTime();
+
+				return (since < 200 && since > 0 && (event.touches == undefined || event.touches.length == 1));
+			}
+
+			function singleTap(event) {
+				var now = new Date().getTime();
+				var since = now - latestTap;
+				latestTap = new Date().getTime();
+
+				return (since < 200 && since > 0 && (event.touches == undefined || event.touches.length == 1));
+			}
 
 			// returns true iff the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
 			//https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
 			function intersects(a,b,c,d,p,q,r,s) {
-				// debugPt(new THREE.Vector2(c, d), 0xbd1efc);
-				// console.log(a, b, c, d);
 				var det, gamma, lambda;
 				det = (c - a) * (s - q) - (r - p) * (d - b);
 				if (det === 0) {
@@ -1252,9 +1262,7 @@
 				} else {
 					lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
 					gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
-					if ((0.0001 < lambda && lambda < 0.9999) && (0.0001 < gamma && gamma < 0.9999)) {
-						// console.log('lambd', lambda, 'gamm', gamma);
-						// console.log(a + lambda * (c-a), q + gamma * (s-q));
+					if ((EPSILON < lambda && lambda < (1 - EPSILON)) && (EPSILON < gamma && gamma < (1 - EPSILON))) {
 						return new THREE.Vector3(
 							a + lambda * (c-a),
 							b + lambda * (d-b),
@@ -1264,9 +1272,11 @@
 					}
 				}
 			}
+
 			function ptsIntersect(p, q, r, s) {
 				return intersects(p.x, p.y, q.x, q.y, r.x, r.y, s.x, s.y);
 			}
+
 		</script>
 
 	</body>
