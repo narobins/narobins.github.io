@@ -15,11 +15,22 @@
 				text-align: center;
 				position: relative;
 			}
-			#container2 {
-				width: 84vw;
-				height: 84vw;
-				margin: 8vw auto;
-				position: relative
+			#outer-container {
+				position: absolute;
+				width: 100%;
+				height: 100%;
+			}
+			#container {
+				position: absolute;
+				width: 86vw;
+				height: 86vh;
+			}
+			#inner-container {
+				position: relative;
+				top: 7vh;
+				bottom: 7vh;
+				left: 7vw;
+				right: 7vw;
 			}
 			#canvas {
 				margin: 0;
@@ -49,35 +60,10 @@
 				position: absolute;
 				overflow-y: scroll;
 			}
-			#icons {
-				position: fixed;
-				left: 0;
-				bottom: 50px;
-				width: 44px;
-				height: 44px;
-				padding: 0;
-				margin: 20px;
-			}
-			#icons a {
-				float: left;
-				background: rgba(255, 255, 255, 0.15);
-				opacity: 0.7;
-				margin: 0;
-				padding: 5px;
-				width: 60px;
-				height: 60px;
-				display: none;
-			}
 			@media only screen and (orientation: landscape) {
 				#icon-menu {
 					width: 30px;
 				}
-			}
-			#icons a.active {
-				display: inline-block;
-			}
-			#icons a i {
-				font-size: 40pt;
 			}
 			#icon-menu {
 				position: fixed;
@@ -85,6 +71,7 @@
 				top: 0;
 				padding: 0;
 				margin: 5px;
+				z-index: 2;
 			}
 			#icon-menu i {
 				width: 30px;
@@ -114,7 +101,7 @@
 			p {
 				margin: 5px;
 			}
-			.fixed {
+			.fixed-w {
 				display: inline-block;
 				width: 140px;
 			}
@@ -131,8 +118,9 @@
 			<a title="transform"><i class="tool-icon material-icons transform-tool" data-mode="transform">open_with</i></a>
 		</div>
 
+		<div id="outer-container">
 		<div id="container">
-			<div id="container2">
+			<div id="inner-container">
 				<canvas id="canvas">Your browser does not support Canvas.</canvas>
 
 				<div id="menu">
@@ -140,24 +128,24 @@
 						<i class="material-icons close" onClick="toggleModal()">close</i>
 						<div class="menu-icons">
 							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
-							<a href="https://github.com/narobins" target="_blank"><i class="material-icons" alt="code">code</i></a>
+							<a href="https://github.com/narobins/narobins.github.io/blob/master/drawtools/cutncolor.html" target="_blank"><i class="material-icons" alt="code">code</i></a>
 						</p>
 						<h2>About</h2>
-						<p>What if drawing interfaces emphasized design decisions (shape, composition, color) rather than mimicking physical media?</p>
+						<p>What if drawing interfaces emphasized design decisions (shape, composition, color) instead of mimicking physical media?</p>
 
 						<h2>Usage</h2>
 						<h3>Shape mode</h3>
-						<p><span class='fixed'>Click and drag</span>: draw shape</p>
-						<p><span class='fixed'>Double click</span>: close shape</p>
+						<p><span class='fixed-w'>Click and drag</span>: draw shape</p>
+						<p><span class='fixed-w'>Double click</span>: close shape</p>
 
 						<h3>Color mode</h3>
-						<p><span class='fixed'>Click</span>: select shape</p>
-						<p><span class='fixed'>Click and drag</span>: shift hue</p>
-						<p><span class='fixed'>Vertical scroll</span>: shift value</p>
+						<p><span class='fixed-w'>Click</span>: select shape</p>
+						<p><span class='fixed-w'>Click and drag</span>: shift hue</p>
+						<p><span class='fixed-w'>Vertical scroll</span>: shift value</p>
 
 						<h3>Move mode</h3>
-						<p><span class='fixed'>Left click drag</span>: move shape</p>
-						<p><span class='fixed'>Vertical scroll</span>: bring shape forward/back</p>
+						<p><span class='fixed-w'>Left click drag</span>: move shape</p>
+						<p><span class='fixed-w'>Vertical scroll</span>: bring shape forward/back</p>
 
 						<h2>Stats</h2>
 						<p><span id='numShapes'>0</span> shapes, <span id='numVertices'>0</span> vertices</p>
@@ -165,6 +153,7 @@
 					</div>
 				</div>
 			</div>
+		</div>
 		</div>
 
 		<script src="https://threejs.org/build/three.js"></script>
@@ -194,7 +183,7 @@
 		const float pi = 3.14159;
 
 		// All components are in the range [0…1], including hue.
-		// this function from stackoverflow
+		// source: https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
 		vec3 hsv2rgb(vec3 c)
 		{
 			vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -215,38 +204,37 @@
 		</script>
 
 		<script>
-			console.log('hello');
-
 			// TODO
 			// download in new tab?
+			// rotation anchor not correct
 			//
 			// tablet
 			// three finger drag, edit mode, switches current shape when you leave shape, also imprecise
 			// line for three finger drag edit mode
 			// resize keep screen aspect ratio
 
+			// scene
 			var container;
 			var camera, scene, renderer, composer, outlinePass, effectFXAA ;
 			var raycaster = new THREE.Raycaster();
 			var mouse = new THREE.Vector2();
-
-			var MAX_POINTS = 500;
-			var PREV_DIST = 80;
+			var squareBG;
 			var CANVAS_WIDTH;
 			var CANVAS_HEIGHT;
-			var START_COLOR = new THREE.Color();
-			START_COLOR.setHSL(Math.random(), Math.random() * 0.6 + 0.2, Math.random() * 0.6 + 0.2);
+			var MODE = 'draw';
+
+			// config / performance settings
+			var MAX_POINTS = 500;
+			var MAX_ZDEPTH = 1000;
+			var PREV_DIST = 80;
 			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
 			var EPSILON = 0.0001;
-			var MODE = 'draw';
 
 			// draw
 			var p_idx = 0;
 			var currentLine = false;
 			var prevPt = false;
 			var hueShiftColor;
-			var squareBG;
-
 			var newShapePt = false;
 
 			// transform
@@ -254,23 +242,16 @@
 			var transformOrigin = false;
 			var startScale = false;
 			var startRotate = 0;
-			var currentObj = false;
 
+			// other
+			var currentObj = false;
 			var latestTap = new Date().getTime();
 			var latestDrag = false;
 			var hoverObj = false;
+			var zCount = 1;
 
 			var lineViz = false;
 			var hueViz = false;
-
-			var zCount = 1;
-			var MAX_ZDEPTH = 1000;
-
-			var nPts = 0;
-
-			var lastScale = 1;
-
-			onDocumentResize();
 
 			initDim();
 
@@ -284,6 +265,7 @@
 			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
 				toggleModal();
 			})
+
 			var toolIcons = document.getElementsByClassName('tool-icon');
 			for (var i = 0; i < toolIcons.length; i++) {
 				toolIcons[i].addEventListener('mousedown', switchTool)
@@ -293,7 +275,7 @@
 				var menu = document.getElementById("menu");
 				if (menu.style.display !== "none") {
 					menu.style.display = "none";
-					MODE = (document.getElementById("draw-tool").className == "active" ? 'draw' : 'transform');
+					MODE = document.getElementsByClassName("active")[0].getAttribute('data-mode');
 				} else {
 					menu.style.display = "block";
 					MODE = '';
@@ -338,14 +320,16 @@
 
 				// setup doc
 				var squareMesh = new THREE.PlaneGeometry(CANVAS_WIDTH, CANVAS_HEIGHT)
-				var squareMaterial = new THREE.MeshBasicMaterial( { color: START_COLOR } );
+				var startColor = new THREE.Color();
+				startColor.setHSL(Math.random(), Math.random() * 0.6 + 0.2, Math.random() * 0.6 + 0.2);
+				var squareMaterial = new THREE.MeshBasicMaterial( { color: startColor } );
 				squareBG = new THREE.Mesh(squareMesh, squareMaterial);
 				squareBG.position.z = -MAX_ZDEPTH + 1;
 				scene.add(squareBG);
 
 				// renderer stuff
 				canvas = document.getElementById("canvas");
-				container = document.getElementById("container");
+				container = document.getElementById("outer-container");
 				renderer = new THREE.WebGLRenderer({canvas: canvas, preserveDrawingBuffer: true});
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( bb.width, bb.height );
@@ -475,6 +459,7 @@
 					currentLine.geometry.computeBoundingSphere();
 					var center = new THREE.Vector3();
 					center.copy(currentLine.geometry.boundingSphere.center);
+					// debugPt(currentLine.geometry.boundingSphere.center, 0x0000ff);
 
 					var p = currentLine.geometry.attributes.position.array;
 					var n_pts = p_idx;
@@ -676,11 +661,14 @@
 			}
 
 			function showLineModal(vec, c) {
+				var hsl = new THREE.Color();
+				hsl = c.getHSL(hsl);
+				var lineColor = hsl.l < 0.4 ? 0xffffff : 0x000000;
 				var lineGeo = new THREE.Geometry();
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
 
-				lineViz = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: c } ) );
+				lineViz = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: lineColor } ) );
 				lineViz.position.z = zCount;
 				scene.add( lineViz );
 			}
@@ -719,12 +707,7 @@
 			}
 
 			function showHueWheel(vec, c) {
-				var hsl = new THREE.Color();
-				hsl = c.getHSL(hsl);
-				console.log(hsl);
-				var lineColor = hsl.l < 0.4 ? 0xffffff : 0x000000;
-				console.log(lineColor);
-				showLineModal(vec, lineColor);
+				showLineModal(vec, c);
 
 				var circleGeo = new THREE.CircleGeometry( 20, 24 );
 				var circleMat = new THREE.ShaderMaterial({
@@ -800,8 +783,9 @@
 				if (!hoverObj) {
 					hoverObj = checkIntersection(event);
 				}
+
 				if (!lineViz) {
-					showLineModal(currentPt());
+					showLineModal(currentPt(), hoverObj.material.color);
 				}
 
 				onDocumentMouseWheel(event);
@@ -846,7 +830,7 @@
 
 					var k = (pinchDist(event) / startScale) / currentObj.scale.x;
 					if (!lineViz) {
-						showLineModal(currentPt());
+						showLineModal(currentPt(), currentObj.material.color);
 					}
 					setLineModal(currentPt());
 
@@ -937,7 +921,6 @@
 
 			function onDocumentMouseDown(event) {
 				if (MODE == 'draw') {
-
 					if (event.type === "mousedown" || event.touches != undefined) {
 						if (doubleClick(event)) {
 							// double click > close shape, but only for mouse or single finger
@@ -980,7 +963,8 @@
 								(event.type == 'mousedown') && rightClick(event)) {
 								startScale = pinchDist(event) / currentObj.scale.x;
 								startRotate = pinchAngle(event);
-								showLineModal(pinchCenter(event));
+								showLineModal(pinchCenter(event), currentObj.material.color);
+								debugPt(pinchCenter(event), 0xff0000);
 
 								if (event.type == 'mousedown') {
 									transformOrigin = currentObj.position;
@@ -1075,6 +1059,7 @@
 					if (delta && hoverObj) {
 						var hsl = new THREE.Color();
 						hsl = hoverObj.material.color.getHSL(hsl);
+						// uncomment this to enable scrolling left/right for saturation
 						// var deltaS = delta.x ? clamp(hsl.s + delta.x, 0, 1) : hsl.s;
 						var deltaS = hsl.s;
 						var deltaL = delta.y ? clamp(hsl.l + delta.y, 0, 1) : hsl.l;
@@ -1089,13 +1074,11 @@
 			}
 
 			function onDocumentResize() {
-				var dim = Math.min(window.innerWidth, window.innerHeight) * 0.84;
-				document.getElementById("container2").style.width = dim + "px"
-				document.getElementById("container2").style.height = dim + "px"
+				var w = document.getElementById("container").offsetWidth;
+				var h = document.getElementById("container").offsetHeight;
 				if (renderer != undefined) {
-					renderer.setSize(dim, dim);
-					composer.setSize(dim, dim);
-					// effectFXAA.uniforms[ "resolution" ].value.set( 1 / window.innerWidth, 1 / window.innerHeight );
+					renderer.setSize(w, h);
+					composer.setSize(w, h);
 				}
 			}
 
@@ -1253,7 +1236,7 @@
 			}
 
 			// returns true iff the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
-			//https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
+			// source: https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
 			function intersects(a,b,c,d,p,q,r,s) {
 				var det, gamma, lambda;
 				det = (c - a) * (s - q) - (r - p) * (d - b);
