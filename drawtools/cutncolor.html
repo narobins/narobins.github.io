@@ -1,10 +1,13 @@
 <html lang="en">
 	<head>
-		<title>Shape Color Draw Fun</title>
+		<title>Color Sandbox</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-	  rel="stylesheet">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+		<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+		<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+		<link rel="manifest" href="icons/site.webmanifest">
 		<style>
 			body {
 				font-family: Monospace;
@@ -65,6 +68,16 @@
 					width: 30px;
 				}
 			}
+			@media (hover: none) {
+				.instructions[data-device="desktop"] {
+					display: none !important;
+				}
+			}
+			@media (hover: hover) {
+				.instructions[data-device="touchscreen"] {
+					display: none !important;
+				}
+			}
 			#icon-menu {
 				position: fixed;
 				left: 0;
@@ -108,6 +121,16 @@
 			h3, h2 {
 				margin-bottom: 0;
 			}
+			.instructions {
+				display: none;
+				bottom: 10px;
+				position: absolute;
+				opacity: 0.3;
+				width: 100%;
+			}
+			.instructions.active {
+				display: block;
+			}
 		</style>
 	</head>
 	<body>
@@ -128,33 +151,42 @@
 						<i class="material-icons close" onClick="toggleModal()">close</i>
 						<div class="menu-icons">
 							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
-							<a href="https://github.com/narobins/narobins.github.io/blob/master/drawtools/cutncolor.html" target="_blank"><i class="material-icons" alt="code">code</i></a>
 						</p>
-						<h2>About</h2>
-						<p>What if drawing interfaces emphasized design decisions (shape, composition, color) instead of mimicking physical media?</p>
+						<h2>Color Sandbox</h2>
 
-						<h2>Usage</h2>
-						<h3>Shape mode</h3>
-						<p><span class='fixed-w'>Click and drag</span>: draw shape</p>
-						<p><span class='fixed-w'>Double click</span>: close shape</p>
+						<p>A fun and quick way to make shapes, choose colors, and play with composition.</p>
 
-						<h3>Color mode</h3>
-						<p><span class='fixed-w'>Click</span>: select shape</p>
-						<p><span class='fixed-w'>Click and drag</span>: shift hue</p>
-						<p><span class='fixed-w'>Vertical scroll</span>: shift value</p>
+						<h2>Why?</h2>
+						<p>We have many wonderful tools that can help us make beautiful images. It's hard to make something when you expect it to be beautiful and you also have an undo button. Let's make some mediocre images and congratulate ourselves for choosing creation over mindless internet browsing.</p>
 
-						<h3>Move mode</h3>
-						<p><span class='fixed-w'>Left click drag</span>: move shape</p>
-						<p><span class='fixed-w'>Vertical scroll</span>: bring shape forward/back</p>
 
-						<h2>Stats</h2>
+						<h2>Inspiration</h2>
+						<ul>
+							<li><a href='https://color.hailpixel.com/' target="_blank">this color picker</a>. Minimal interface and instant feedback.</li>
+							<li><a href='https://store.steampowered.com/app/953300/ART_SQOOL/' target="_blank">this game</a>. Haven't played it, but I like that it hides "worthwhile" lessons inside weird fun.</li>
+							<li><a href='https://www.instagram.com/p/BgSGhCjluxC/' target="_blank">this class</a>. Particularly: all color is relative, think shapes not lines, block in fast and adjust later.</li>
+							<li><a href='https://www.heavypoly.com/heavypaint' target="_blank">this app</a>. Fewer options means you're making more important decisions. Also, portability.</li>
+
+						</ul>
+
+						<h2>Technical</h2>
 						<p><span id='numShapes'>0</span> shapes, <span id='numVertices'>0</span> vertices</p>
+						<p>Made with <a href='http://threejs.org'>three.js</a></p>
+						<a href="https://github.com/narobins/narobins.github.io/blob/master/drawtools/cutncolor.html" target="_blank"><i class="material-icons" alt="code">code</i></a>
 						<br />
+
 					</div>
 				</div>
 			</div>
 		</div>
 		</div>
+		<p class='instructions active' data-device='desktop' data-mode="draw">click or drag to draw shape, double click to close</p>
+		<p class='instructions' data-device='desktop' data-mode="color">drag to shift hue, scroll to shift value</p>
+		<p class='instructions' data-device='desktop' data-mode="transform">left drag to move, right drag to scale and rotate, scroll to change overlap</p>
+
+		<p class='instructions active' data-device='touchscreen' data-mode="draw">tap or drag to draw shape, double click to close</p>
+		<p class='instructions' data-device='touchscreen' data-mode="color">tap to select, drag to shift hue, two finger scroll to shift value</p>
+		<p class='instructions' data-device='touchscreen' data-mode="transform">one finger to move, two fingers to scale and rotate</p>
 
 		<script src="https://threejs.org/build/three.js"></script>
 
@@ -206,12 +238,6 @@
 		<script>
 			// TODO
 			// download in new tab?
-			// rotation anchor not correct
-			//
-			// tablet
-			// three finger drag, edit mode, switches current shape when you leave shape, also imprecise
-			// line for three finger drag edit mode
-			// resize keep screen aspect ratio
 
 			// scene
 			var container;
@@ -229,6 +255,7 @@
 			var PREV_DIST = 80;
 			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
 			var EPSILON = 0.0001;
+			var VALUE_SHIFT_SENSITIVITY = 0.02;
 
 			// draw
 			var p_idx = 0;
@@ -245,10 +272,13 @@
 
 			// other
 			var currentObj = false;
-			var latestTap = new Date().getTime();
+			var lastTapTime = new Date().getTime();
+			var lastTapPos = false;
 			var latestDrag = false;
-			var hoverObj = false;
+			var colorObj = false;
 			var zCount = 1;
+
+			var fingers = false;
 
 			var lineViz = false;
 			var hueViz = false;
@@ -259,7 +289,7 @@
 			animate();
 
 			document.getElementById('download').addEventListener('touchstart', function(event) {
-				saveCanvas();
+				saveCanvas(event);
 			})
 
 			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
@@ -267,13 +297,17 @@
 			})
 
 			var toolIcons = document.getElementsByClassName('tool-icon');
+			var toolInstructions = document.getElementsByClassName('instructions');
 			for (var i = 0; i < toolIcons.length; i++) {
 				toolIcons[i].addEventListener('mousedown', switchTool)
 			}
 
+			// gui
+			///////////////////////////////////////////////////////////////////
+
 			function toggleModal() {
 				var menu = document.getElementById("menu");
-				if (menu.style.display !== "none") {
+				if (menu.style.display == "block") {
 					menu.style.display = "none";
 					MODE = document.getElementsByClassName("active")[0].getAttribute('data-mode');
 				} else {
@@ -290,9 +324,19 @@
 						toolIcons[i].className = "material-icons tool-icon";
 					}
 				}
+				for (var i = 0; i < toolInstructions.length; i++) {
+					if (toolInstructions[i].getAttribute('data-mode') != MODE) {
+						toolInstructions[i].className = "instructions";
+					} else {
+						toolInstructions[i].className = "instructions active";
+					}
+				}
 				clearCanvas();
 				clearDraw();
 			}
+
+			// scene
+			///////////////////////////////////////////////////////////////////
 
 			function initDim() {
 				bb = document.getElementById("canvas").getBoundingClientRect();
@@ -366,28 +410,6 @@
 				document.addEventListener("keypress", onKeyPress, false);
 			}
 
-			function checkIntersection(event) {
-				var mouse = mouseToCanvasPt();
-				var obj = intersectPt(mouse);
-				return obj;
-			}
-
-			function startNewShape(vec) {
-				clearDraw();
-				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
-
-				var geometry = new THREE.BufferGeometry();
-				var positions = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
-				geometry.addAttribute( "position", new THREE.BufferAttribute( positions, 3 ) );
-				drawCount = 0; // draw the first 2 points, only
-				geometry.setDrawRange( 0, 0 );
-
-				var material = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 1 } );
-				currentLine = new THREE.Line( geometry,  material );
-				currentLine.position.z = zCount;
-				scene.add( currentLine );
-			}
-
 			function setCurrent(obj) {
 				currentObj = obj;
 				outline(obj);
@@ -400,6 +422,113 @@
 				} else {
 					outlinePass.selectedObjects = [];
 				}
+			}
+
+			function animate() {
+				requestAnimationFrame( animate );
+				render();
+			}
+
+			function render() {
+				composer.render();
+			}
+
+			// Visualizers
+			///////////////////////////////////////////////////////////////////
+
+			function showLineModal(vec, c) {
+				var hsl = new THREE.Color();
+				hsl = c.getHSL(hsl);
+				var lineColor = hsl.l < 0.4 ? 0xffffff : 0x000000;
+				var lineGeo = new THREE.Geometry();
+				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
+				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
+
+				lineViz = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: lineColor } ) );
+				lineViz.position.z = zCount;
+				scene.add(lineViz);
+			}
+
+			function setLineModal(vec) {
+				lineViz.geometry.vertices[1].x = vec.x;
+				lineViz.geometry.vertices[1].y = vec.y;
+				lineViz.geometry.verticesNeedUpdate = true;
+			}
+
+			function showHueWheel(vec, c) {
+				clearHueShift();
+				showLineModal(vec, c);
+
+				var circleGeo = new THREE.CircleGeometry( 20, 24 );
+				var circleMat = new THREE.ShaderMaterial({
+					vertexShader: document.getElementById("hueVisualizeVertex").textContent,
+					fragmentShader: document.getElementById("hueVisualizeFragment").textContent,
+					depthWrite: false,
+					depthTest: false
+				});
+				hueViz = new THREE.Mesh(circleGeo, circleMat);
+				hueViz.position.x = vec.x;
+				hueViz.position.y = vec.y;
+				scene.add(hueViz);
+			}
+
+			// Debugging
+			///////////////////////////////////////////////////////////////////
+
+			function debugPt(vec, c) {
+				c = c || 0xffffff;
+				var geometry = new THREE.CircleGeometry(4, 4);
+				var material = new THREE.MeshBasicMaterial({color:c});
+				var pt = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({color:c}) );
+				pt.position.x = vec.x;
+				pt.position.y = vec.y;
+				pt.position.z = MAX_ZDEPTH;
+				scene.add( pt );
+				return pt;
+			}
+
+			function debugLine(pt1, pt2, c) {
+				var pta = new THREE.Vector3();
+				var ptb = new THREE.Vector3();
+				pta.copy(pt1);
+				ptb.copy(pt2);
+				var jitter = 0;
+				pta.x += Math.random() * jitter;
+				pta.y += Math.random() * jitter;
+				ptb.x -= Math.random() * jitter;
+				ptb.y -= Math.random() * jitter;
+
+				var geo = new THREE.Geometry();
+				geo.vertices.push(pta);
+				geo.vertices.push(ptb);
+
+				var line = new THREE.Line( geo, new THREE.LineBasicMaterial( { color: c } ) );
+				line.position.z = zCount;
+				scene.add( line );
+			}
+
+			function debugVec(pt, v) {
+				var pt2 = new THREE.Vector3(pt.x + 30 * v.x, pt.y + 30 * v.y);
+				return debugLine(pt, pt2, 0x00ffff);
+			}
+
+			// Draw
+			///////////////////////////////////////////////////////////////////
+
+			function startNewShape(vec) {
+				clearDraw();
+				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
+
+				var geometry = new THREE.BufferGeometry();
+				var pos = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
+				geometry.addAttribute( "position", new THREE.BufferAttribute( pos, 3 ) );
+				drawCount = 0; // draw the first 2 points, only
+				geometry.setDrawRange( 0, 0 );
+
+				var material = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 1 } );
+				currentLine = new THREE.Line( geometry,  material );
+				currentLine.position.z = zCount;
+				scene.add( currentLine );
 			}
 
 			function addPoint(x, y) {
@@ -417,25 +546,26 @@
 						}
 					}
 				}
-				var positions = currentLine.geometry.attributes.position.array;
+				var pos = currentLine.geometry.attributes.position.array;
 
-				positions[ p_idx ++ ] = x;
-				positions[ p_idx ++ ] = y;
-				positions[ p_idx ++ ] = 0;
+				pos[p_idx ++] = x;
+				pos[p_idx ++] = y;
+				pos[p_idx ++] = 0;
 
 				currentLine.geometry.setDrawRange( 0, p_idx / 3 );
 				currentLine.geometry.attributes.position.needsUpdate = true;
 			}
 
-			function avgSampleColors(pts) {
+			function avgSampleColors(pts, c) {
 				var sample;
 				var avg = new THREE.Color(0,0,0);
-				var quarter = Math.floor(Math.max(8, pts.length) / 8);
+				var quarter = Math.floor(Math.max(8, pts.length / 3) / 8);
 				var nSamples = 0;
 
-				for (var j = 0; j < pts.length; j+=quarter) {
+				for (var j = 0; j < pts.length / 3; j+=quarter) {
+					var eyedropper = new THREE.Vector3(pts[j * 3] + c.x, pts[j * 3 + 1] + c.y);
 					// normalize pt, but don't flip y
-					sample = intersectPt(canvasPt(pts[j], flipY=false));
+					sample = intersectPt(canvasPt(eyedropper, flipY=false));
 					if (sample != undefined) {
 						nSamples += 1;
 						avg.add(sample.material.color);
@@ -449,20 +579,21 @@
 				return avg.multiplyScalar(1.0 / nSamples);
 			}
 
-			function offsetRandom(scale, offset) {
-				return (2 * Math.round(Math.random()) - 1) * ((Math.random() * scale) + offset);
-			}
-
 			function closeShape() {
-				// turns current line into a polygon (multiple polygons if the line is self-intersecting)
+				// turns current line into polygon(s)
+				// if the line is self-intersecting, will try to split it into multiple polygons, this has bugs
 				if (currentLine) {
+					// calculate bounding box to find center
+					currentLine.geometry.attributes.position.count = currentLine.geometry.drawRange.count;
 					currentLine.geometry.computeBoundingSphere();
+
 					var center = new THREE.Vector3();
 					center.copy(currentLine.geometry.boundingSphere.center);
-					// debugPt(currentLine.geometry.boundingSphere.center, 0x0000ff);
 
 					var p = currentLine.geometry.attributes.position.array;
 					var n_pts = p_idx;
+
+					// add first point as last point
 					p[ p_idx ++ ] = p[0];
 					p[ p_idx ++ ] = p[1];
 					p[ p_idx ++ ] = p[2];
@@ -519,7 +650,6 @@
 						while (j < p_idx - 3) {
 							var intersect;
 							if (!(i == j || i == j + 3)) {
-							// if (i_intersection || !(i == j || i == j + 3)) {
 								intersect = ptsIntersect(start, end, getPt(j), getPt(j+3));
 								if (intersect) {
 									if (res == undefined || sqdist(start, res) > sqdist(start, intersect)) {
@@ -623,17 +753,20 @@
 						visiting = queue.pop();
 					}
 
-					var avg = avgSampleColors(shapes[0]);
+					// clear line before averaging colors so we don't sample the line itself
+					clearLine();
+
+					// new shape color is average of sampled colors beneath it
+					var geometry = new THREE.ShapeBufferGeometry( shapes );
+					var avg = avgSampleColors(geometry.attributes.position.array, center);
 					avg.offsetHSL(offsetRandom(0.03, 0.01), offsetRandom(0.05, 0.03), offsetRandom(0.03, 0.06));
 
-					var geometry = new THREE.ShapeBufferGeometry( shapes );
 					var mesh = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial( { color: avg } ));
 					scene.add(mesh);
 					mesh.position.x = center.x;
 					mesh.position.y = center.y;
 					mesh.position.z = zCount;
 					zCount += 0.99;
-					clearLine();
 
 					numVertices = 0;
 					scene.children.map(function(a) {
@@ -648,112 +781,37 @@
 				clearDraw();
 			}
 
-			function debugPt(vec, c) {
-				c = c || 0xffffff;
-				var geometry = new THREE.CircleGeometry( 4, 4 );
-				var material = new THREE.MeshBasicMaterial({color:c});
-				var pt = new THREE.Mesh( geometry, new THREE.MeshBasicMaterial({color:c}) );
-				pt.position.x = vec.x;
-				pt.position.y = vec.y;
-				pt.position.z = MAX_ZDEPTH;
-				scene.add( pt );
-				return pt;
-			}
-
-			function showLineModal(vec, c) {
-				var hsl = new THREE.Color();
-				hsl = c.getHSL(hsl);
-				var lineColor = hsl.l < 0.4 ? 0xffffff : 0x000000;
-				var lineGeo = new THREE.Geometry();
-				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
-				lineGeo.vertices.push(new THREE.Vector3(vec.x, vec.y, 0));
-
-				lineViz = new THREE.Line( lineGeo, new THREE.LineBasicMaterial( { color: lineColor } ) );
-				lineViz.position.z = zCount;
-				scene.add( lineViz );
-			}
-
-			function debugLine(pt1, pt2, c) {
-				var pta = new THREE.Vector3();
-				var ptb = new THREE.Vector3();
-				pta.copy(pt1);
-				ptb.copy(pt2);
-				var jitter = 0;
-				pta.x += Math.random() * jitter;
-				pta.y += Math.random() * jitter;
-				// pta.z = 0;
-				ptb.x -= Math.random() * jitter;
-				ptb.y -= Math.random() * jitter;
-				// ptb.z = 0;
-
-				var geo = new THREE.Geometry();
-				geo.vertices.push(pta);
-				geo.vertices.push(ptb);
-
-				var line = new THREE.Line( geo, new THREE.LineBasicMaterial( { color: c } ) );
-				line.position.z = zCount;
-				scene.add( line );
-			}
-
-			function debugVec(pt, v) {
-				var pt2 = new THREE.Vector3(pt.x + 30 * v.x, pt.y + 30 * v.y);
-				return debugLine(pt, pt2, 0x00ffff);
-			}
-
-			function setLineModal(vec) {
-				lineViz.geometry.vertices[1].x = vec.x;
-				lineViz.geometry.vertices[1].y = vec.y;
-				lineViz.geometry.verticesNeedUpdate = true;
-			}
-
-			function showHueWheel(vec, c) {
-				showLineModal(vec, c);
-
-				var circleGeo = new THREE.CircleGeometry( 20, 24 );
-				var circleMat = new THREE.ShaderMaterial({
-					vertexShader: document.getElementById("hueVisualizeVertex").textContent,
-					fragmentShader: document.getElementById("hueVisualizeFragment").textContent,
-					depthWrite: false,
-					depthTest: false
-				});
-				hueViz = new THREE.Mesh( circleGeo, circleMat );
-				hueViz.position.x = vec.x;
-				hueViz.position.y = vec.y;
-				scene.add( hueViz );
-			}
-
-			function animate() {
-				requestAnimationFrame( animate );
-				render();
-			}
-
-			function render() {
-				composer.render();
-			}
-
 			// Color
 			///////////////////////////////////////////////////////////////////
 
+			function setColorObj(obj, hueWheel=true) {
+				// sets obj as current color changing object
+				// shows hue wheel if obj is defined
+				if (!obj || colorObj.id != obj.id) {
+					clearHueShift();
+					colorObj = obj;
+					setCurrent(colorObj);
+				}
+
+				if (colorObj && colorObj.material.color) {
+					hueShiftColor = colorObj.material.color.clone();
+					if (hueWheel) {
+						showHueWheel(currentPt(), hueShiftColor);
+					}
+				}
+				return colorObj;
+			}
+
 			function startHueShift(event) {
 				clearLine();
-				hoverObj = checkIntersection(event);
-				if (hoverObj && hoverObj.material.color) {
-					hueShiftColor = hoverObj.material.color.clone();
-					showHueWheel(currentPt(), hueShiftColor);
-					event.preventDefault();
-					event.stopPropagation();
-				}
+				obj = checkIntersection(event);
+				setColorObj(obj);
+				event.preventDefault();
+				event.stopPropagation();
 			}
 
 			function shiftHue(event) {
-				if (!hoverObj || !lineViz) {
-					startHueShift(event);
-				}
-
-				clearLine();
-				prevPt = false;
 				var vec = currentPt();
-				// vec.z = 0;
 				setLineModal(vec);
 
 				var diff = new THREE.Vector2(
@@ -763,37 +821,40 @@
 				var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
 				var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
 
-				hoverObj.material.color.set(hueShiftColor);
+				colorObj.material.color.set(hueShiftColor);
 
 				// adjust hue in a copy of the color
 				var offsetColor = new THREE.Color();
-				hoverObj.material.color.getHSL(offsetColor);
+				colorObj.material.color.getHSL(offsetColor);
 				offsetColor.setHSL(degrees, 1.0, offsetColor.l);
 
 				// mix offset color back into original color
 				offsetColor.multiplyScalar(amount);
-				hoverObj.material.color.multiplyScalar(1.0 - amount);
-				hoverObj.material.color.add(offsetColor);
+				colorObj.material.color.multiplyScalar(1.0 - amount);
+				colorObj.material.color.add(offsetColor);
 				event.preventDefault();
 			}
 
 			function shiftValue(event) {
-				prevPt = false;
 
-				if (!hoverObj) {
-					hoverObj = checkIntersection(event);
+				if (event.type != "touchmove") {
+					setColorObj(checkIntersection(event), hueWheel=false);
+					clearHueShift(removeLine=(event.type != "touchmove"));
+					clearLine();
 				}
 
-				if (!lineViz) {
-					showLineModal(currentPt(), hoverObj.material.color);
+				var delta = mouseDelta(event);
+				if (delta && colorObj) {
+					var hsl = new THREE.Color();
+					hsl = colorObj.material.color.getHSL(hsl);
+					// uncomment this to enable scrolling left/right for saturation
+					// var deltaS = delta.x ? clamp(hsl.s + delta.x, 0, 1) : hsl.s;
+					var deltaS = hsl.s;
+					var deltaL = delta.y ? clamp(hsl.l + delta.y, 0, 1) : hsl.l;
+
+					colorObj.material.color.setHSL(hsl.h, deltaS, deltaL);
 				}
 
-				onDocumentMouseWheel(event);
-
-				var vec = currentPt();
-				lineViz.geometry.vertices[1].x = vec.x;
-				lineViz.geometry.vertices[1].y = vec.y;
-				lineViz.geometry.verticesNeedUpdate = true;
 			}
 
 			// Transform
@@ -864,6 +925,7 @@
 				if (newShapePt) {
 					scene.remove(newShapePt);
 					newShapePt = false;
+					prevPt = false;
 				}
 			}
 
@@ -873,23 +935,22 @@
 				}
 
 				// clear color
-				clearHueShift()
-				hoverObj = false;
+				clearHueShift();
+				colorObj = false;
 
 				// clear transform
 				currentTransformPt = false;
 				setCurrent(false);
 			}
 
-			function clearHueShift(hueOnly=false) {
-				if (lineViz) {
+			function clearHueShift(removeLine=true) {
+				if (hueViz) {
 					scene.remove(hueViz);
 					hueViz = false;
-					if (!hueOnly) {
-						scene.remove(lineViz);
-						lineViz = false;
-					}
-					return true;
+				}
+				if (lineViz && removeLine) {
+					scene.remove(lineViz);
+					lineViz = false;
 				}
 			}
 
@@ -905,14 +966,18 @@
 			// Events
 			///////////////////////////////////////////////////////////////////
 			// disable right click menu
-			// document.oncontextmenu = function () {
-			// 	return false;
-			// };
+			document.oncontextmenu = function () {
+				return false;
+			};
 
-			function saveCanvas() {
+			function saveCanvas(event) {
+				// var img = document.getElementById("canvas").toDataURL("image/png");
+				// console.log(img);
+				// var nt = window.open(img, "Image");
 				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
+				alert(img);
 				document.getElementById("download").setAttribute("href", img);
-				document.getElementById("download").setAttribute("download", "asdf.png");
+				document.getElementById("download").setAttribute("download", String(new Date().getTime()) + ".png");
 			}
 
 			function onKeyPress() {
@@ -920,6 +985,9 @@
 			}
 
 			function onDocumentMouseDown(event) {
+				if (event.type === "touchstart") {
+					fingers = event.touches.length;
+				}
 				if (MODE == 'draw') {
 					if (event.type === "mousedown" || event.touches != undefined) {
 						if (doubleClick(event)) {
@@ -936,16 +1004,13 @@
 					}
 
 				} else if (MODE == 'color') {
-					if ((event.type == 'mousedown' && leftClick(event)) ||
-						(event.type == 'touchstart' && event.touches == 2)) {
+					if (event.type == 'mousedown' && leftClick(event)) {
 						startHueShift(event);
 
-					} else if (event.type == 'touchstart' && event.touches == 1) {
-						var intersected = checkIntersection(event);
-						if (intersected && intersected.id != squareBG.id) {
-							currentObj = setCurrent(intersected);
-						}
+					} else if (event.type == 'touchstart' && fingers == 1) {
+						tapDown(event);
 					}
+
 					event.preventDefault();
 
 				} else if (MODE == 'transform') {
@@ -956,15 +1021,14 @@
 							currentTransformPt = currentPt();
 
 							if ((event.type == 'mousedown' && !rightClick(event)) ||
-								(event.touches && event.touches.length == 1)) {
+								(event.touches && fingers == 1)) {
 								transformOrigin = getObjectPos(currentObj);
 
-							} else if ((event.touches && event.touches.length == 2) ||
+							} else if ((event.touches && fingers == 2) ||
 								(event.type == 'mousedown') && rightClick(event)) {
 								startScale = pinchDist(event) / currentObj.scale.x;
 								startRotate = pinchAngle(event);
 								showLineModal(pinchCenter(event), currentObj.material.color);
-								debugPt(pinchCenter(event), 0xff0000);
 
 								if (event.type == 'mousedown') {
 									transformOrigin = currentObj.position;
@@ -979,7 +1043,7 @@
 			function onDocumentMouseMove(event) {
 				if (MODE == 'draw') {
 
-					if ((event.type == "mousemove" || event.touches.length == 1)) {
+					if ((event.type == "mousemove" || fingers == 1)) {
 						if (prevPt) {
 							var vec = currentPt();
 							if (sqdist(vec, prevPt) > PREV_DIST) {
@@ -991,22 +1055,22 @@
 
 				} else if (MODE == 'color') {
 
-					if (event.type == "touchmove" && event.touches.length == 3) {
+					if (event.type == "touchmove" && fingers == 2) {
 
 						shiftValue(event);
 
 					} else if ((event.type == "mousemove" && event.buttons == 1) ||
-							(event.type == "touchmove" && event.touches.length == 2)) {
+							(event.type == "touchmove" && fingers == 1)) {
 
 						shiftHue(event);
 					}
 
 				} else if (MODE == 'transform') {
 					if (currentObj && currentTransformPt) {
-						if (event.type == "touchmove" && event.touches.length == 3) {
+						if (event.type == "touchmove" && fingers == 3) {
 							flipShapes(event);
 
-						} else if ((event.type == "touchmove" && event.touches.length == 2) ||
+						} else if ((event.type == "touchmove" && fingers == 2) ||
 							(event.type == 'mousemove') && rightClick(event)) {
 
 							scaleRotateTransform(event);
@@ -1032,44 +1096,46 @@
 					}
 
 					// clear draw
-					clearHueShift()
-					hoverObj = false;
+					setColorObj(false);
 
 					// clear transform
 					currentTransformPt = false;
 
 					setCurrent(false);
+
+				} else if (MODE == "color" && event.type == "touchend") {
+					if (tapUp(event)) {
+						var intersected = checkIntersection(event);
+						if (intersected) {
+							setColorObj(setCurrent(intersected));
+						} else {
+							setColorObj(false);
+						}
+
+					} else {
+						setLineModal(hueViz.position);
+					}
 				}
 
 				if (event.type == "mouseup" || event.touches.length == 0) {
 					prevPt = false;
 					latestDrag = false;
 				}
+				if (event.type == "touchend") {
+					fingers = false;
+				}
 			}
 
 			function onDocumentMouseWheel(event) {
 				if (MODE == "color") {
-					clearHueShift(hueOnly=(event.type == "touchmove"));
-					clearLine();
 
-					if (event.type != "touchmove") {
-						hoverObj = checkIntersection(event);
-					}
-					var delta = mouseDelta(event);
-					if (delta && hoverObj) {
-						var hsl = new THREE.Color();
-						hsl = hoverObj.material.color.getHSL(hsl);
-						// uncomment this to enable scrolling left/right for saturation
-						// var deltaS = delta.x ? clamp(hsl.s + delta.x, 0, 1) : hsl.s;
-						var deltaS = hsl.s;
-						var deltaL = delta.y ? clamp(hsl.l + delta.y, 0, 1) : hsl.l;
-
-						hoverObj.material.color.setHSL(hsl.h, deltaS, deltaL);
-					}
+					shiftValue(event);
 
 				} else if (MODE == "transform") {
+
 					flipShapes(event);
 				}
+
 				event.preventDefault();
 			}
 
@@ -1082,22 +1148,8 @@
 				}
 			}
 
-			// Utility
+			// Position detection
 			///////////////////////////////////////////////////////////////////
-
-			function normalizeZDepths() {
-				var sorted = scene.children.map(function(a) {
-					return {"id": a.id, "z": a.position.z }
-				});
-				sorted.sort((a, b) => a.z - b.z);
-				var count = 0;
-				sorted.map(function(a) {
-					if (a.id != squareBG.id) {
-						scene.getObjectById(a.id).position.z = count;
-						count += 0.99;
-					}
-				});
-			}
 
 			function intersectPt(pt) {
 				raycaster.setFromCamera( pt, camera );
@@ -1116,6 +1168,45 @@
 					(flip * (v.y) / bb.height) * 2,
 					0.5 );
 			}
+
+			function checkIntersection(event) {
+				var mouse = mouseToCanvasPt();
+				var obj = intersectPt(mouse);
+				return obj;
+			}
+
+			function currentPt() {
+				var vec = mouseToCanvasPt();
+				vec.unproject( camera );
+				vec.x = clamp(vec.x, -CANVAS_WIDTH, CANVAS_WIDTH);
+				vec.y = clamp(vec.y, -CANVAS_HEIGHT, CANVAS_HEIGHT);
+				return vec;
+			}
+
+			function mouseToCanvasPt() {
+				var vec = new THREE.Vector3();
+
+				if (event.touches != undefined || event.changedTouches != undefined) {
+					// average all the touch coordinates
+					var touches = Object.values(event.touches.length > 0 ? event.touches : event.changedTouches);
+
+					vec.set(
+						touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length,
+						touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length,
+						0.5);
+				} else {
+					vec.set(event.clientX, event.clientY, 0.5);
+				}
+
+				var bb = document.getElementById("canvas").getBoundingClientRect();
+				vec.set(((vec.x - bb.left) / bb.width) * 2 - 1,
+					(-(vec.y - bb.top) / bb.height) * 2 + 1,
+					0.5 );
+				return vec;
+			}
+
+			// Transform detection
+			///////////////////////////////////////////////////////////////////
 
 			function pinchCenter(event) {
 				if (event.touches == undefined) {
@@ -1174,46 +1265,14 @@
 				} else {
 					// mouse
 					return {
-						x: 0.02 * clamp(-event.deltaX, -1, 1),
-						y: 0.02 * clamp(-event.deltaY, -1, 1)
+						x: VALUE_SHIFT_SENSITIVITY * clamp(-event.deltaX, -1, 1),
+						y: VALUE_SHIFT_SENSITIVITY * clamp(-event.deltaY, -1, 1)
 					};
 				}
 			}
 
-			function mouseToCanvasPt() {
-				var vec = new THREE.Vector3();
-
-				if (event.touches != undefined) {
-					// average all the touch coordinates
-					var touches = Object.values(event.touches);
-					vec.set(
-						touches.reduce((a, b) => ({clientX: a.clientX + b.clientX})).clientX / touches.length,
-						touches.reduce((a, b) => ({clientY: a.clientY + b.clientY})).clientY / touches.length,
-						0.5);
-				} else {
-					vec.set(event.clientX, event.clientY, 0.5);
-				}
-
-				var bb = document.getElementById("canvas").getBoundingClientRect();
-				vec.set(((vec.x - bb.left) / bb.width) * 2 - 1,
-					(-(vec.y - bb.top) / bb.height) * 2 + 1,
-					0.5 );
-				return vec;
-			}
-
-			function currentPt() {
-				var vec = mouseToCanvasPt();
-				vec.unproject( camera );
-				vec.x = clamp(vec.x, -CANVAS_WIDTH, CANVAS_WIDTH);
-				vec.y = clamp(vec.y, -CANVAS_HEIGHT, CANVAS_HEIGHT);
-				return vec;
-			}
-
-			function sqdist(v1, v2) { return (v1.x - v2.x) ** 2 + (v1.x - v2.x) ** 2; }
-
-			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
-
-			function clockwise(v1, v2) { return !(v1.y * v2.x > v1.x * v2.y); }
+			// Event processing
+			///////////////////////////////////////////////////////////////////
 
 			function rightClick(event) { return ("which" in event) ? event.which == 3 : event.button == 2; }
 
@@ -1221,19 +1280,58 @@
 
 			function doubleClick(event) {
 				var now = new Date().getTime();
-				var since = now - latestTap;
-				latestTap = new Date().getTime();
+				var since = now - lastTapTime;
+				lastTapTime = new Date().getTime();
 
 				return (since < 200 && since > 0 && (event.touches == undefined || event.touches.length == 1));
 			}
 
-			function singleTap(event) {
-				var now = new Date().getTime();
-				var since = now - latestTap;
-				latestTap = new Date().getTime();
-
-				return (since < 200 && since > 0 && (event.touches == undefined || event.touches.length == 1));
+			function tapDown(event) {
+				lastTapPos = currentPt();
+				lastTapTime = new Date().getTime();
 			}
+			function tapUp(event) {
+				if (lastTapTime && lastTapPos) {
+					var currTap = currentPt();
+
+					var now = new Date().getTime();
+					var since = now - lastTapTime;
+
+					var tapDist = sqdist(currTap, lastTapPos);
+
+					lastTapTime = false;
+					lastTapPos = false;
+
+					return (since < 200 && since > 0 && (tapDist < 2));
+				}
+			}
+
+			// Utility
+			///////////////////////////////////////////////////////////////////
+
+			function offsetRandom(scale, offset) {
+				return (2 * Math.round(Math.random()) - 1) * ((Math.random() * scale) + offset);
+			}
+
+			function normalizeZDepths() {
+				var sorted = scene.children.map(function(a) {
+					return {"id": a.id, "z": a.position.z }
+				});
+				sorted.sort((a, b) => a.z - b.z);
+				var count = 0;
+				sorted.map(function(a) {
+					if (a.id != squareBG.id) {
+						scene.getObjectById(a.id).position.z = count;
+						count += 0.99;
+					}
+				});
+			}
+
+			function sqdist(v1, v2) { return (v1.x - v2.x) ** 2 + (v1.y - v2.y) ** 2; }
+
+			function clamp(v, a, b) { return Math.min(Math.max(v, a), b); }
+
+			function clockwise(v1, v2) { return !(v1.y * v2.x > v1.x * v2.y); }
 
 			// returns true iff the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
 			// source: https://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function#15182022
