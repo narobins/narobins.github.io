@@ -1028,11 +1028,9 @@
 								(event.type == 'mousedown') && rightClick(event)) {
 								startScale = pinchDist(event) / currentObj.scale.x;
 								startRotate = pinchAngle(event);
-								showLineModal(pinchCenter(event), currentObj.material.color);
+								transformOrigin = currentObj.position;
 
-								if (event.type == 'mousedown') {
-									transformOrigin = currentObj.position;
-								}
+								showLineModal(pinchCenter(event), currentObj.material.color);
 							}
 						}
 					}
@@ -1212,9 +1210,10 @@
 				if (event.touches == undefined) {
 					return {x: currentObj.position.x, y: currentObj.position.y};
 				} else {
+					var bb = document.getElementById("canvas").getBoundingClientRect();
 					return {
-						x: (event.touches[0].clientY - event.touches[1].clientY) / 2,
-						y: (event.touches[1].clientX - event.touches[0].clientX) / 2
+						x: (event.touches[0].clientY - event.touches[1].clientY) / 2 - CANVAS_WIDTH / 2 - bb.left,
+						y: -(event.touches[1].clientX - event.touches[0].clientX) / 2 + CANVAS_HEIGHT / 2 + bb.top
 					}
 				}
 			}
