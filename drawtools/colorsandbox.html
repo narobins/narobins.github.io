@@ -85,6 +85,7 @@
 				padding: 0;
 				margin: 5px;
 				z-index: 2;
+				user-select: none;
 			}
 			#icon-menu i {
 				width: 30px;
@@ -186,9 +187,9 @@
 		<p class='instructions' data-device='desktop' data-mode="color">drag to shift hue, scroll to shift value</p>
 		<p class='instructions' data-device='desktop' data-mode="transform">left drag to move, right drag to scale and rotate, scroll to change overlap</p>
 
-		<p class='instructions active' data-device='touchscreen' data-mode="draw">tap or drag to draw shape, double click to close</p>
+		<p class='instructions active' data-device='touchscreen' data-mode="draw">tap or drag to draw shape, double tap to close</p>
 		<p class='instructions' data-device='touchscreen' data-mode="color">tap to select, drag to shift hue, two finger scroll to shift value</p>
-		<p class='instructions' data-device='touchscreen' data-mode="transform">one finger to move, two fingers to scale and rotate</p>
+		<p class='instructions' data-device='touchscreen' data-mode="transform">one finger to move, two fingers to scale and rotate, double tap to send backward</p>
 
 		<script src="https://threejs.org/build/three.js"></script>
 
@@ -228,10 +229,10 @@
 		void main() {
 			gl_FragColor = vec4(1.0);
 			vec2 nUv = (vUv.xy - vec2(0.5, 0.5)) * 2.0;
-			if (pow(nUv.x, 2.0) + pow(nUv.y, 2.0) < 0.5) {
+			if (pow(nUv.x, 2.0) + pow(nUv.y, 2.0) < 0.8) {
 				discard;
 			}
-			gl_FragColor.x = (atan(nUv.y, nUv.x)  ) / (2.0 * pi);
+			gl_FragColor.x = (atan(nUv.y, nUv.x) - (pi / 2.0)) / (2.0 * pi);
 			gl_FragColor.xyz = hsv2rgb(gl_FragColor.xyz);
 		}
 
@@ -240,6 +241,7 @@
 		<script>
 			// TODO
 			// download in new tab?
+			// instructions placement on tablet
 
 			// scene
 			var container;
@@ -255,7 +257,7 @@
 			var MAX_POINTS = 500;
 			var MAX_ZDEPTH = 1000;
 			var PREV_DIST = 80;
-			var HUE_SHIFT_SENSITIVITY = 1.0/150.0;
+			var HUE_SHIFT_SENSITIVITY = 1/200.0;
 			var EPSILON = 0.0001;
 			var VALUE_SHIFT_SENSITIVITY = 0.02;
 
@@ -263,8 +265,10 @@
 			var p_idx = 0;
 			var currentLine = false;
 			var prevPt = false;
-			var hueShiftColor;
 			var newShapePt = false;
+
+			// color
+			var hueShiftColor;
 
 			// transform
 			var currentTransformPt = false;
@@ -285,6 +289,8 @@
 			var lineViz = false;
 			var hueViz = false;
 
+			var isTouchscreen = getComputedStyle(document.querySelectorAll('.instructions.active[data-device="touchscreen"]')[0], null).display == 'block';
+
 			initDim();
 
 			init();
@@ -294,9 +300,9 @@
 				saveCanvas(event);
 			})
 
-			document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
-				toggleModal();
-			})
+			// document.getElementById('toggle-menu').addEventListener('touchstart', function(event) {
+			// 	toggleModal();
+			// })
 
 			var toolIcons = document.getElementsByClassName('tool-icon');
 			var toolInstructions = document.getElementsByClassName('instructions');
@@ -361,16 +367,25 @@
 					1,
 					2 * MAX_ZDEPTH + 1 );
 				camera.position.z = MAX_ZDEPTH + 1;
-
 				scene = new THREE.Scene();
 
+				dpr = 1;
+				if (window.devicePixelRatio !== undefined) {
+					dpr = window.devicePixelRatio;
+				}
+
+				var w = bb.width;
+				var h = bb.height;
+
 				// setup doc
-				var squareMesh = new THREE.PlaneGeometry(CANVAS_WIDTH, CANVAS_HEIGHT)
+				var squareMesh = new THREE.PlaneGeometry(1, 1)
 				var startColor = new THREE.Color();
 				startColor.setHSL(Math.random(), Math.random() * 0.6 + 0.2, Math.random() * 0.6 + 0.2);
 				var squareMaterial = new THREE.MeshBasicMaterial( { color: startColor } );
 				squareBG = new THREE.Mesh(squareMesh, squareMaterial);
 				squareBG.position.z = -MAX_ZDEPTH + 1;
+				squareBG.scale.x = CANVAS_WIDTH;
+				squareBG.scale.y = CANVAS_HEIGHT;
 				scene.add(squareBG);
 
 				// renderer stuff
@@ -378,17 +393,17 @@
 				container = document.getElementById("outer-container");
 				renderer = new THREE.WebGLRenderer({canvas: canvas, preserveDrawingBuffer: true});
 				renderer.setPixelRatio( window.devicePixelRatio );
-				renderer.setSize( bb.width, bb.height );
+				renderer.setSize(w, h);
 				renderer.sortElements = false;
 
 				// postprocessing
 				composer = new THREE.EffectComposer( renderer );
-				composer.setSize( bb.width, bb.height );
+				composer.setSize(w, h);
 				var renderPass = new THREE.RenderPass( scene, camera );
 				composer.addPass( renderPass );
 
 				outlinePass = new THREE.OutlinePass( new THREE.Vector2( bb.width, bb.height ), scene, camera );
-				outlinePass.edgeStrength = 0.5;
+				outlinePass.edgeStrength = 0.7;
 				outlinePass.edgeGlow = 0;
 				outlinePass.edgeThickness = 1;
 				outlinePass.visibleEdgeColor.set(0xffffff);
@@ -396,7 +411,7 @@
 				composer.addPass( outlinePass );
 
 				effectFXAA = new THREE.ShaderPass( THREE.FXAAShader );
-				effectFXAA.uniforms[ 'resolution' ].value.set( 1 / window.innerWidth, 1 / window.innerHeight );
+				effectFXAA.uniforms[ 'resolution' ].value.set(1 / (w * dpr), 1 / (h * dpr));
 				effectFXAA.renderToScreen = true;
 				composer.addPass( effectFXAA );
 
@@ -419,7 +434,7 @@
 			}
 
 			function outline(mesh) {
-				if (mesh) {
+				if (mesh && isTouchscreen) {
 					outlinePass.selectedObjects = [mesh];
 				} else {
 					outlinePass.selectedObjects = [];
@@ -461,7 +476,7 @@
 				clearHueShift();
 				showLineModal(vec, c);
 
-				var circleGeo = new THREE.CircleGeometry( 20, 24 );
+				var circleGeo = new THREE.CircleGeometry( 32, 24 );
 				var circleMat = new THREE.ShaderMaterial({
 					vertexShader: document.getElementById("hueVisualizeVertex").textContent,
 					fragmentShader: document.getElementById("hueVisualizeFragment").textContent,
@@ -797,11 +812,15 @@
 
 				if (colorObj && colorObj.material.color) {
 					hueShiftColor = colorObj.material.color.clone();
-					if (hueWheel) {
-						showHueWheel(currentPt(), hueShiftColor);
-					}
 				}
 				return colorObj;
+			}
+
+			function finishEditingColor(event) {
+				if (colorObj && colorObj.material.color) {
+					hueShiftColor = colorObj.material.color.clone();
+				}
+				clearHueShift();
 			}
 
 			function startHueShift(event) {
@@ -814,13 +833,17 @@
 
 			function shiftHue(event) {
 				var vec = currentPt();
-				setLineModal(vec);
 
+				if (!hueViz) {
+					showHueWheel(vec, hueShiftColor);
+
+				}
+				setLineModal(vec);
 				var diff = new THREE.Vector2(
 					lineViz.geometry.vertices[1].x - lineViz.geometry.vertices[0].x,
 					lineViz.geometry.vertices[1].y - lineViz.geometry.vertices[0].y,
 				);
-				var degrees = Math.atan2(diff.y, diff.x) / (2.0 * Math.PI);
+				var degrees = (Math.atan2(diff.y, diff.x) - (Math.PI / 2.0)) / (2.0 * Math.PI);
 				var amount = Math.min(diff.length() * HUE_SHIFT_SENSITIVITY, 1.0);
 
 				colorObj.material.color.set(hueShiftColor);
@@ -834,11 +857,11 @@
 				offsetColor.multiplyScalar(amount);
 				colorObj.material.color.multiplyScalar(1.0 - amount);
 				colorObj.material.color.add(offsetColor);
+
 				event.preventDefault();
 			}
 
 			function shiftValue(event) {
-
 				if (event.type != "touchmove") {
 					setColorObj(checkIntersection(event), hueWheel=false);
 					clearHueShift(removeLine=(event.type != "touchmove"));
@@ -877,12 +900,15 @@
 			function flipShapes(event) {
 				currentObj = currentObj || checkIntersection(event);
 				if (currentObj && currentObj.id != squareBG.id) {
-					var delta = mouseDelta(event);
-					if (event.type == "touchmove") {
-						delta *= -1;
+					var delta;
+
+					if (event.type == "touchstart") {
+						delta = -1;
+					} else {
+						delta = mouseDelta(event).y > 0 ? -1 : 1;
 					}
 					outline(currentObj);
-					currentObj.position.z = currentObj.position.z + (delta.y > 0 ? -1 : 1);
+					currentObj.position.z = currentObj.position.z + delta;
 					zCount = Math.max(currentObj.position.z, zCount);
 					normalizeZDepths();
 				}
@@ -1016,23 +1042,27 @@
 					event.preventDefault();
 
 				} else if (MODE == 'transform') {
-					var intersected = checkIntersection(event);
-					if (intersected && intersected.id != squareBG.id) {
-						currentObj = setCurrent(intersected);
-						if (currentObj) {
-							currentTransformPt = currentPt();
+					if (doubleClick(event) && event.type == 'touchstart') {
+						flipShapes(event);
+					} else {
+						var intersected = checkIntersection(event);
+						if (intersected && intersected.id != squareBG.id) {
+							currentObj = setCurrent(intersected);
+							if (currentObj) {
+								currentTransformPt = currentPt();
 
-							if ((event.type == 'mousedown' && !rightClick(event)) ||
-								(event.touches && fingers == 1)) {
-								transformOrigin = getObjectPos(currentObj);
+								if ((event.type == 'mousedown' && !rightClick(event)) ||
+									(event.touches && fingers == 1)) {
+									transformOrigin = getObjectPos(currentObj);
 
-							} else if ((event.touches && fingers == 2) ||
-								(event.type == 'mousedown') && rightClick(event)) {
-								startScale = pinchDist(event) / currentObj.scale.x;
-								startRotate = pinchAngle(event);
-								transformOrigin = currentObj.position;
+								} else if ((event.touches && fingers == 2) ||
+									(event.type == 'mousedown') && rightClick(event)) {
+									startScale = pinchDist(event) / currentObj.scale.x;
+									startRotate = pinchAngle(event);
+									transformOrigin = currentObj.position;
 
-								showLineModal(pinchCenter(event), currentObj.material.color);
+									showLineModal(pinchCenter(event), currentObj.material.color);
+								}
 							}
 						}
 					}
@@ -1067,10 +1097,7 @@
 
 				} else if (MODE == 'transform') {
 					if (currentObj && currentTransformPt) {
-						if (event.type == "touchmove" && fingers == 3) {
-							flipShapes(event);
-
-						} else if ((event.type == "touchmove" && fingers == 2) ||
+						if ((event.type == "touchmove" && fingers == 2) ||
 							(event.type == 'mousemove') && rightClick(event)) {
 
 							scaleRotateTransform(event);
@@ -1113,7 +1140,7 @@
 						}
 
 					} else {
-						setLineModal(hueViz.position);
+						finishEditingColor(event);
 					}
 				}
 
@@ -1139,13 +1166,26 @@
 				event.preventDefault();
 			}
 
-			function onDocumentResize() {
+			function onDocumentResize(event) {
 				var w = document.getElementById("container").offsetWidth;
 				var h = document.getElementById("container").offsetHeight;
 				if (renderer != undefined) {
 					renderer.setSize(w, h);
 					composer.setSize(w, h);
+					effectFXAA.uniforms[ 'resolution' ].value.set(1 / w, 1 / h);
 				}
+
+				camera.left = -w / 2;
+				camera.right = w / 2;
+				camera.top = h / 2;
+				camera.bottom = -h / 2;
+				camera.updateProjectionMatrix();
+
+				squareBG.scale.x = w;
+				squareBG.scale.y = h;
+
+				CANVAS_HEIGHT = h;
+				CANVAS_WIDTH = w;
 			}
 
 			// Position detection
