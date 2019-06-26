@@ -25,15 +25,13 @@
 			}
 			#container {
 				position: absolute;
-				width: 86vw;
-				height: 86vh;
+				width: 86%;
+				height: 86%;
+				left: 7%;
+				bottom: 7%;
 			}
 			#inner-container {
 				position: relative;
-				top: 7vh;
-				bottom: 7vh;
-				left: 7vw;
-				right: 7vw;
 			}
 			#canvas {
 				margin: 0;
@@ -128,7 +126,7 @@
 				margin: 0;
 				height: 6vh;
 				position: absolute;
-				opacity: 0.3;
+				opacity: 0.4;
 				width: 100%;
 			}
 			.instructions.active {
@@ -423,7 +421,7 @@
 				container.addEventListener( "touchend", onDocumentMouseUp, false );
 				container.addEventListener( "wheel", onDocumentMouseWheel, false );
 
-				window.addEventListener( "resize", onDocumentResize, false );
+				window.onresize = onDocumentResize;
 				document.addEventListener("keypress", onKeyPress, false);
 			}
 
