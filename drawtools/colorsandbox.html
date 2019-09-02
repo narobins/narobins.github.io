@@ -1151,6 +1151,8 @@
 
 					} else if (MODE == 'color') {
 
+						colorObj = colorObj || setColorObj(squareBG);
+
 						if (colorObj) {
 
 							if (event.type == "touchmove" && fingers == 2) {
