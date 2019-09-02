@@ -59,7 +59,7 @@
 				left: 0;
 				right: 0;
 				position: absolute;
-				overflow-y: scroll;
+				overflow-y: auto;
 			}
 			@media only screen and (orientation: landscape) {
 				#icon-menu {
@@ -85,6 +85,9 @@
 				z-index: 2;
 				user-select: none;
 			}
+			#download i {
+				user-select: none;
+			}
 			#icon-menu i {
 				width: 30px;
 				line-height: 30px;
@@ -108,6 +111,9 @@
 				cursor: pointer;
 			}
 			.menu-icons a {
+				color: white;
+			}
+			a:link, a:visited, a:hover, a:active {
 				color: white;
 			}
 			p {
@@ -136,10 +142,11 @@
 	</head>
 	<body>
 		<div id='icon-menu'>
-			<a id="toggle-menu" onClick="toggleModal()"><i class="material-icons">help</i></a>
 			<a title="shape"><i class="tool-icon material-icons draw-tool active" data-mode="draw">category</i></a>
 			<a title="color"><i class="tool-icon material-icons color-tool" data-mode="color">palette</i></a>
 			<a title="transform"><i class="tool-icon material-icons transform-tool" data-mode="transform">open_with</i></a>
+			<a id="download" onClick="saveCanvas()"><i class="material-icons" alt="save">save</i></a>
+			<a id="toggle-menu" onClick="toggleModal()"><i class="material-icons">help</i></a>
 		</div>
 
 		<div id="outer-container">
@@ -150,9 +157,6 @@
 				<div id="menu">
 					<div id="menu-container">
 						<i class="material-icons close" onClick="toggleModal()">close</i>
-						<div class="menu-icons">
-							<a id="download"><i class="material-icons" alt="save" onClick="saveCanvas()">save</i></a>
-						</p>
 						<h2>Color Sandbox</h2>
 
 						<p>A fun and quick way to make shapes, choose colors, and play with composition.</p>
@@ -163,17 +167,17 @@
 
 						<h2>Inspiration</h2>
 						<ul>
-							<li><a href='https://color.hailpixel.com/' target="_blank">this color picker</a>. Minimal interface and instant feedback.</li>
-							<li><a href='https://store.steampowered.com/app/953300/ART_SQOOL/' target="_blank">this game</a>. Haven't played it, but I like that it hides "worthwhile" lessons inside weird fun.</li>
-							<li><a href='https://www.instagram.com/p/BgSGhCjluxC/' target="_blank">this class</a>. Particularly: all color is relative, think shapes not lines, block in fast and adjust later.</li>
-							<li><a href='https://www.heavypoly.com/heavypaint' target="_blank">this app</a>. Fewer options means you're making more important decisions. Also, portability.</li>
+							<li><a href='https://color.hailpixel.com/' target="_blank">this color picker</a></li>
+							<li><a href='https://store.steampowered.com/app/953300/ART_SQOOL/' target="_blank">this game</a></li>
+							<li><a href='https://www.instagram.com/p/BgSGhCjluxC/' target="_blank">this class</a></li>
+							<li><a href='https://www.heavypoly.com/heavypaint' target="_blank">this app</a></li>
 
 						</ul>
 
 						<h2>Technical</h2>
 						<p><span id='numShapes'>0</span> shapes, <span id='numVertices'>0</span> vertices</p>
-						<p>Made with <a href='http://threejs.org'>three.js</a></p>
-						<a href="https://github.com/narobins/narobins.github.io/blob/master/drawtools/colorsandbox.html" target="_blank"><i class="material-icons" alt="code">code</i></a>
+						<p>Made with <a href='http://threejs.org' target="_blank">three.js</a></p>
+						<p>Source on <a href='https://github.com/narobins/narobins.github.io/blob/master/drawtools/colorsandbox.html' target="_blank">github</a></p>
 						<br />
 
 					</div>
@@ -183,11 +187,11 @@
 		</div>
 		<p class='instructions active' data-device='desktop' data-mode="draw">click or drag to draw shape, double click to close</p>
 		<p class='instructions' data-device='desktop' data-mode="color">drag to shift hue, scroll to shift value</p>
-		<p class='instructions' data-device='desktop' data-mode="transform">left drag to move, right drag to scale and rotate, scroll to change overlap</p>
+		<p class='instructions' data-device='desktop' data-mode="transform">drag to move, right drag to scale and rotate, double click or scroll to change z-order</p>
 
 		<p class='instructions active' data-device='touchscreen' data-mode="draw">tap or drag to draw shape, double tap to close</p>
 		<p class='instructions' data-device='touchscreen' data-mode="color">tap to select, drag to shift hue, two finger scroll to shift value</p>
-		<p class='instructions' data-device='touchscreen' data-mode="transform">one finger to move, two fingers to scale and rotate, double tap to send backward</p>
+		<p class='instructions' data-device='touchscreen' data-mode="transform">tap to select, one finger to move, two fingers to scale and rotate,<br />double tap or three finger drag to change z-order</p>
 
 		<script src="https://threejs.org/build/three.js"></script>
 
@@ -237,8 +241,8 @@
 		</script>
 
 		<script>
-			// TODO
-			// download in new tab?
+
+			var isTouchscreen = getComputedStyle(document.querySelectorAll('.instructions.active[data-device="touchscreen"]')[0], null).display == 'block';
 
 			// scene
 			var container;
@@ -254,27 +258,30 @@
 			var MAX_POINTS = 500;
 			var MAX_ZDEPTH = 1000;
 			var PREV_DIST = 80;
-			var HUE_SHIFT_SENSITIVITY = 1/200.0;
+			var HUE_SHIFT_SENSITIVITY = 1/300.0;
 			var EPSILON = 0.0001;
-			var VALUE_SHIFT_SENSITIVITY = 0.02;
+			var VALUE_SHIFT_SENSITIVITY = (isTouchscreen ? 0.2 : 0.02);
 
 			// draw
 			var p_idx = 0;
 			var currentLine = false;
 			var prevPt = false;
 			var newShapePt = false;
+			var newShapePos = false;
 
 			// color
 			var hueShiftColor;
 
 			// transform
-			var currentTransformPt = false;
 			var transformOrigin = false;
+			var startTranslate = false;
 			var startScale = false;
 			var startRotate = 0;
+			var scrollDelta = 0;
 
 			// other
 			var currentObj = false;
+			var flipObj = false;
 			var lastTapTime = new Date().getTime();
 			var lastTapPos = false;
 			var latestDrag = false;
@@ -285,8 +292,6 @@
 
 			var lineViz = false;
 			var hueViz = false;
-
-			var isTouchscreen = getComputedStyle(document.querySelectorAll('.instructions.active[data-device="touchscreen"]')[0], null).display == 'block';
 
 			var menu = document.getElementById("menu");
 			menu.style.display = 'none';
@@ -529,7 +534,8 @@
 
 			function startNewShape(vec) {
 				clearDraw();
-				newShapePt = debugPt(new THREE.Vector3(vec.x, vec.y), 0xffffff);
+				newShapePos = new THREE.Vector3(vec.x, vec.y);
+				newShapePt = debugPt(newShapePos, 0xffffff);
 
 				var geometry = new THREE.BufferGeometry();
 				var pos = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
@@ -647,8 +653,8 @@
 						} else if (countIntersections(intersect, b_avg, i)) {
 							return false;
 						} else {
-							debugPt(intersect, 0xff0000);
-							throw new Error('both cant be clockwise');
+							// hmm weird
+							scene.remove(currentLine);
 						}
 					}
 
@@ -879,46 +885,95 @@
 
 			// Transform
 			///////////////////////////////////////////////////////////////////
-			function moveShape(shape, delta) {
-				var center = {
-					'x': shape.position.x,
-					'y': shape.position.y,
-				};
+			function startTransform(event) {
+				var intersected = checkIntersection(event);
+				if (intersected && intersected.id != squareBG.id) {
+					currentObj = setCurrent(intersected);
+					if (currentObj) {
+						startTranslate = currentPt();
 
-				var p = {
-					'x': transformOrigin.x + delta.x,
-					'y': transformOrigin.y + delta.y,
-				};
-				shape.applyMatrix(new THREE.Matrix4().makeTranslation(p.x - center.x, p.y - center.y, 0) );
+						if ((event.type == 'mousedown' && !rightClick(event)) ||
+							(event.type == 'touchstart' && fingers == 1)) {
+							transformOrigin = getObjectPos(currentObj);
+
+						} else if (event.type == 'mousedown' && rightClick(event)) {
+							startScale = pinchDist(event) / currentObj.scale.x;
+							startRotate = pinchAngle(event);
+							transformOrigin = getObjectPos(currentObj);
+
+							showLineModal(pinchCenter(event), currentObj.material.color);
+
+						} else if (event.type == 'touchstart') {
+							if (!startScale) {
+								startScale = pinchDist(event) / currentObj.scale.x;
+							}
+							if (!startRotate) {
+								startRotate = pinchAngle(event);
+							}
+							transformOrigin = getObjectPos(currentObj);
+						}
+					}
+				}
+			}
+
+			function moveShape(shape, p) {
+				p.sub(startTranslate);
+				p.add(transformOrigin);
+
+				shape.applyMatrix(
+					new THREE.Matrix4().makeTranslation(p.x - shape.position.x, p.y - shape.position.y, 0) );
+			}
+
+			function bringToFront(event) {
+				flipObj = currentObj || checkIntersection(event);
+				if (flipObj && flipObj.id != squareBG.id) {
+					if (flipObj.position.z + 1 + EPSILON > zCount) {
+						// send to back
+						flipObj.position.z = 0;
+					} else {
+						// bring to front
+						flipObj.position.z = zCount + 1;
+					}
+					normalizeZDepths();
+				}
 			}
 
 			function flipShapes(event) {
-				currentObj = currentObj || checkIntersection(event);
-				if (currentObj && currentObj.id != squareBG.id) {
-					var delta;
-
-					if (event.type == "touchstart") {
-						delta = -1;
-					} else {
-						delta = mouseDelta(event).y > 0 ? -1 : 1;
+				if (event.type == 'touchmove') {
+					flipObj = currentObj;
+				} else {
+					flipObj = flipObj || checkIntersection(event);
+					if (flipObj) {
+						outline(flipObj);
 					}
-					outline(currentObj);
-					currentObj.position.z = currentObj.position.z + delta;
-					zCount = Math.max(currentObj.position.z, zCount);
-					normalizeZDepths();
+				}
+				if (flipObj && flipObj.id != squareBG.id) {
+					var delta = mouseDelta(event, accumulate=true);
+					if (delta) {
+						if (event.type == "touchmove") {
+							delta = delta.y;
+						} else {
+							delta = delta.y > 0 ? -1 : 1;
+						}
+						flipObj.position.z = flipObj.position.z + delta;
+						zCount = Math.max(flipObj.position.z, zCount);
+						normalizeZDepths();
+					}
 				}
 			}
 
 			function scaleRotateTransform(event) {
 				if (currentObj != undefined) {
-
 					var k = (pinchDist(event) / startScale) / currentObj.scale.x;
-					if (!lineViz) {
-						showLineModal(currentPt(), currentObj.material.color);
-					}
-					setLineModal(currentPt());
-
 					var o = pinchAngle(event);
+
+					if (event.type == 'mousemove') {
+						if (!lineViz) {
+							showLineModal(currentPt(), currentObj.material.color);
+						}
+						setLineModal(currentPt());
+					}
+
 					var c = Math.cos(o - startRotate);
 					var s = Math.sin(o - startRotate);
 					var p = transformOrigin;
@@ -948,6 +1003,7 @@
 				if (newShapePt) {
 					scene.remove(newShapePt);
 					newShapePt = false;
+					newShapePos = false;
 					prevPt = false;
 				}
 			}
@@ -962,7 +1018,7 @@
 				colorObj = false;
 
 				// clear transform
-				currentTransformPt = false;
+				startTranslate = false;
 				setCurrent(false);
 			}
 
@@ -994,16 +1050,24 @@
 			};
 
 			function saveCanvas(event) {
-				// var img = document.getElementById("canvas").toDataURL("image/png");
-				// console.log(img);
-				// var nt = window.open(img, "Image");
-				var img = document.getElementById("canvas").toDataURL().replace("image/png", "image/octet-stream");
-				alert(img);
-				document.getElementById("download").setAttribute("href", img);
-				document.getElementById("download").setAttribute("download", String(new Date().getTime()) + ".png");
+				clearCanvas();
+				clearDraw();
+				render();
+
+				var img = document.getElementById("canvas").toDataURL("image/png");
+
+				if (isTouchscreen) {
+					// can't save image bc ios doesn't like filesystem access
+					var w = window.open('about:blank', 'image from canvas');
+					w.document.write('<img src="' + img + '" alt="from canvas"/>');
+				} else {
+					document.getElementById("download").setAttribute("href", img);
+					document.getElementById("download").setAttribute(
+						"download", "color-sandbox-" + String(new Date().getTime()) + ".png");
+				}
 			}
 
-			function onKeyPress() {
+			function onKeyPress(event) {
 				closeShape();
 			}
 
@@ -1038,36 +1102,36 @@
 						event.preventDefault();
 
 					} else if (MODE == 'transform') {
-						if (doubleClick(event) && event.type == 'touchstart') {
-							flipShapes(event);
-						} else {
-							var intersected = checkIntersection(event);
-							if (intersected && intersected.id != squareBG.id) {
-								currentObj = setCurrent(intersected);
-								if (currentObj) {
-									currentTransformPt = currentPt();
+						if (event.type == 'mousedown') {
+							if (doubleClick(event)) {
+								bringToFront(event);
+							} else {
+								startTransform(event);
+							}
 
-									if ((event.type == 'mousedown' && !rightClick(event)) ||
-										(event.touches && fingers == 1)) {
-										transformOrigin = getObjectPos(currentObj);
-
-									} else if ((event.touches && fingers == 2) ||
-										(event.type == 'mousedown') && rightClick(event)) {
-										startScale = pinchDist(event) / currentObj.scale.x;
-										startRotate = pinchAngle(event);
-										transformOrigin = currentObj.position;
-
-										showLineModal(pinchCenter(event), currentObj.material.color);
-									}
+						} else if (event.type == 'touchstart' && fingers == 1) {
+							if (doubleClick(event)) {
+								bringToFront(event);
+							} else {
+								var tapObj = checkIntersection(event)
+								if (tapObj && currentObj && tapObj.id == currentObj.id && currentObj.id != squareBG.id) {
+									startTransform(event);
+								} else {
+									tapDown(event);
 								}
 							}
+
+						} else if (event.type == 'touchstart' && fingers == 2) {
+							startTransform(event);
 						}
+
+						event.preventDefault();
 					}
-					event.preventDefault();
 				}
 			}
 
 			function onDocumentMouseMove(event) {
+
 				if (menu.style.display == "none") {
 					if (MODE == 'draw') {
 
@@ -1075,39 +1139,48 @@
 							if (prevPt) {
 								var vec = currentPt();
 								if (sqdist(vec, prevPt) > PREV_DIST) {
-									prevPt = vec;
-									addPoint(vec.x, vec.y);
+									if (sqdist(vec, newShapePos) < PREV_DIST) {
+										closeShape();
+									} else {
+										prevPt = vec;
+										addPoint(vec.x, vec.y);
+									}
 								}
 							}
 						}
 
 					} else if (MODE == 'color') {
 
-						if (event.type == "touchmove" && fingers == 2) {
+						if (colorObj) {
 
-							shiftValue(event);
+							if (event.type == "touchmove" && fingers == 2) {
 
-						} else if ((event.type == "mousemove" && event.buttons == 1) ||
-								(event.type == "touchmove" && fingers == 1)) {
+								shiftValue(event);
 
-							shiftHue(event);
+							} else if ((event.type == "mousemove" && event.buttons == 1) ||
+									(event.type == "touchmove" && fingers == 1)) {
+
+								shiftHue(event);
+							}
 						}
 
 					} else if (MODE == 'transform') {
-						if (currentObj && currentTransformPt) {
-							if ((event.type == "touchmove" && fingers == 2) ||
+						if (currentObj) {
+
+							if (event.type == 'touchmove' && fingers == 3) {
+								flipShapes(event);
+
+							} else if ((event.type == "touchmove" && fingers == 2) ||
 								(event.type == 'mousemove') && rightClick(event)) {
 
 								scaleRotateTransform(event);
 
-							} else {
-								var vec = currentPt();
-								vec.sub(currentTransformPt)
-								moveShape(currentObj, vec);
+							} else if ((event.type == "touchmove" && fingers == 1) ||
+								event.type == 'mousemove') {
+								moveShape(currentObj, currentPt());
 							}
-						} else {
-							setCurrent(false);
 						}
+						flipObj = false;
 						event.preventDefault();
 					}
 					event.preventDefault();
@@ -1116,21 +1189,7 @@
 
 			function onDocumentMouseUp(event) {
 				if (menu.style.display == "none") {
-					if (MODE == "draw" || MODE == "transform" ||
-						(MODE == "color" && event.type == "mouseup")) {
-						if (currentObj) {
-							currentObj.geometry.computeBoundingSphere();
-						}
-
-						// clear draw
-						setColorObj(false);
-
-						// clear transform
-						currentTransformPt = false;
-
-						setCurrent(false);
-
-					} else if (MODE == "color" && event.type == "touchend") {
+					if (MODE == "color" && event.type == "touchend") {
 						if (tapUp(event)) {
 							var intersected = checkIntersection(event);
 							if (intersected) {
@@ -1142,7 +1201,28 @@
 						} else {
 							finishEditingColor(event);
 						}
+
+					} else if (MODE == "transform" && event.type == "touchend") {
+						if (tapUp(event)) {
+							setCurrent(checkIntersection(event));
+						}
+						startScale = undefined;
+						startRotate = undefined;
+
+					} else if (MODE == "draw" || MODE == "transform" || MODE == "color") {
+						if (currentObj) {
+							currentObj.geometry.computeBoundingSphere();
+						}
+
+						// clear draw
+						setColorObj(false);
+
+						// clear transform
+						startTranslate = false;
+
+						setCurrent(false);
 					}
+
 
 					if (event.type == "mouseup" || event.touches.length == 0) {
 						prevPt = false;
@@ -1155,6 +1235,7 @@
 			}
 
 			function onDocumentMouseWheel(event) {
+
 				if (menu.style.display == "none") {
 					if (MODE == "color") {
 
@@ -1170,25 +1251,27 @@
 			}
 
 			function onDocumentResize(event) {
-				var w = document.getElementById("container").offsetWidth;
-				var h = document.getElementById("container").offsetHeight;
-				if (renderer != undefined) {
-					renderer.setSize(w, h);
-					composer.setSize(w, h);
-					effectFXAA.uniforms[ 'resolution' ].value.set(1 / w, 1 / h);
+				if (menu.style.display == "none") {
+					var w = document.getElementById("container").offsetWidth;
+					var h = document.getElementById("container").offsetHeight;
+					if (renderer != undefined) {
+						renderer.setSize(w, h);
+						composer.setSize(w, h);
+						effectFXAA.uniforms[ 'resolution' ].value.set(1 / w, 1 / h);
+					}
+
+					camera.left = -w / 2;
+					camera.right = w / 2;
+					camera.top = h / 2;
+					camera.bottom = -h / 2;
+					camera.updateProjectionMatrix();
+
+					squareBG.scale.x = w;
+					squareBG.scale.y = h;
+
+					CANVAS_HEIGHT = h;
+					CANVAS_WIDTH = w;
 				}
-
-				camera.left = -w / 2;
-				camera.right = w / 2;
-				camera.top = h / 2;
-				camera.bottom = -h / 2;
-				camera.updateProjectionMatrix();
-
-				squareBG.scale.x = w;
-				squareBG.scale.y = h;
-
-				CANVAS_HEIGHT = h;
-				CANVAS_WIDTH = w;
 			}
 
 			// Position detection
@@ -1200,7 +1283,7 @@
 
 				if ( intersects.length > 0 ) {
 					intersects.sort((a, b) => b.object.position.z - a.object.position.z);
-					return intersects[ 0 ].object;
+					return intersects[0].object;
 				}
 			}
 
@@ -1291,17 +1374,24 @@
 				}
 			}
 
-			function mouseDelta(event) {
+			function mouseDelta(event, accumulate=false) {
 				if (event.type == "touchmove") {
 					// three finger drag
 					var pt = mouseToCanvasPt();
 					if (latestDrag) {
 						var delta = {
-							x: (pt.x - latestDrag.x),
-							y: (pt.y - latestDrag.y)
+							x: (pt.x - latestDrag.x) * (accumulate ? 5.0 : VALUE_SHIFT_SENSITIVITY),
+							y: (pt.y - latestDrag.y) * (accumulate ? 5.0 : VALUE_SHIFT_SENSITIVITY)
 						};
-						latestDrag = pt;
-						return delta;
+						if (accumulate) {
+							if (Math.abs(delta.y) > 1.0) {
+								latestDrag = pt;
+							}
+							return delta;
+						} else {
+							latestDrag = pt;
+							return delta;
+						}
 					} else {
 						latestDrag = pt;
 						return false;
@@ -1343,10 +1433,15 @@
 
 					var tapDist = sqdist(currTap, lastTapPos);
 
-					lastTapTime = false;
-					lastTapPos = false;
+					if (since < 200 && since > 0 && (tapDist < 2)) {
+						return true;
 
-					return (since < 200 && since > 0 && (tapDist < 2));
+					} else {
+						lastTapTime = false;
+						lastTapPos = false;
+
+						return false;
+					}
 				}
 			}
 
@@ -1369,6 +1464,7 @@
 						count += 0.99;
 					}
 				});
+				zCount = scene.getObjectById(sorted[sorted.length - 1].id).position.z + 1;
 			}
 
 			function sqdist(v1, v2) { return (v1.x - v2.x) ** 2 + (v1.y - v2.y) ** 2; }
